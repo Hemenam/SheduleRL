@@ -53,6 +53,17 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Disable iTBS idle-time reclaim behavior.",
     )
+    schedule_parser.add_argument(
+        "--plot",
+        choices=["gantt"],
+        default=None,
+        help="Render schedule plot.",
+    )
+    schedule_parser.add_argument(
+        "--plot-file",
+        default="schedule_gantt.png",
+        help="Output file path for plot image.",
+    )
     return parser
 
 
@@ -75,6 +86,8 @@ def main() -> None:
                 algorithm=args.algorithm,
                 bandwidth=args.bandwidth,
                 reclaim_idle_time=not args.no_reclaim,
+                plot=args.plot,
+                plot_file=args.plot_file,
             )
             return
 

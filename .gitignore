@@ -15,3 +15,6 @@ vs/
 vscode/
 .vscode/
 .ropeproject/
+
+# app specific stuff
+plots/
