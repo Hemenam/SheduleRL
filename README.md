@@ -1,0 +1,253 @@
+# ScheduRL
+
+ScheduRL is a command-line real-time scheduling sandbox focused on aperiodic workload management with iTBS (Improved Total Bandwidth Server).
+
+It provides:
+- SQLite persistence for task/workload data.
+- ORM-based data access with SQLAlchemy.
+- CLI commands for seeding, listing, clearing, and scheduling.
+- Optional Gantt chart rendering for schedule visualization.
+
+## 1. Project Purpose
+
+This project is designed for experimenting with real-time scheduling behavior using an aperiodic task model.
+
+Core goals:
+- Model aperiodic workloads with release times, execution budgets, and deadlines.
+- Run iTBS assignment and inspect generated service intervals/deadlines.
+- Visualize execution timelines with a generated Gantt plot.
+
+## 2. Tech Stack
+
+- Python 3.14
+- SQLite (database file at project root: `tasks.db`)
+- SQLAlchemy 2.x (ORM)
+- Matplotlib (optional plotting)
+
+## 3. Installation
+
+### 3.1 Clone / Open Project
+
+```bash
+cd /path/to/ScheduRL
+```
+
+### 3.2 Create Virtual Environment
+
+```bash
+python -m venv venv
+source venv/bin/activate
+```
+
+### 3.3 Install Dependencies
+
+```bash
+pip install -r requirements.txt
+```
+
+## 4. Running the CLI
+
+All commands are run through `main.py`:
+
+```bash
+python main.py <command> [options]
+```
+
+If no command is provided, default behavior is equivalent to `list`.
+
+## 5. Commands Reference
+
+### 5.1 `seed`
+
+Populate database with advanced aperiodic seed workload.
+
+```bash
+python main.py seed
+```
+
+Behavior:
+- If DB already has tasks, seed is skipped.
+
+Force replace existing data:
+
+```bash
+python main.py seed --force
+```
+
+Behavior with `--force`:
+- Clears all existing rows.
+- Inserts the full advanced seed set.
+
+### 5.2 `list`
+
+Show all tasks in release-time order:
+
+```bash
+python main.py list
+```
+
+Output fields:
+- `r`: release time
+- `C`: WCET / execution time
+- `D`: relative deadline
+- `T`: period (`-` for aperiodic dataset)
+
+### 5.3 `clear`
+
+Delete all tasks from the database:
+
+```bash
+python main.py clear
+```
+
+### 5.4 `schedule`
+
+Run a scheduler on current tasks.
+
+Current supported algorithm:
+- `itbs`
+
+Basic usage:
+
+```bash
+python main.py schedule -a itbs
+```
+
+Options:
+- `-u`, `--bandwidth`: iTBS server bandwidth `U_s` in `(0, 1]`.
+- `--no-reclaim`: disable idle-time reclaim behavior.
+- `--plot gantt`: generate Gantt chart.
+- `--plot-file <path>`: output image path.
+
+Examples:
+
+```bash
+python main.py schedule -a itbs -u 0.55
+python main.py schedule -a itbs --no-reclaim
+python main.py schedule -a itbs --plot gantt --plot-file plots/itbs_gantt.png
+```
+
+## 6. Data Model
+
+ORM entity: `RealTimeTask` (`models/task.py`)
+
+Columns:
+- `id` (PK)
+- `name`
+- `task_type` (default: `aperiodic`)
+- `release_time`
+- `wcet`
+- `relative_deadline`
+- `period` (nullable)
+- `description` (nullable)
+
+Note: current workflow treats all seeded tasks as aperiodic.
+
+## 7. Architecture Overview
+
+The code is split by responsibility.
+
+### 7.1 `controllers/`
+
+Command orchestration layer.
+
+- `command_controller.py`
+  - Thin command router/dispatcher.
+- `task_controller.py`
+  - Handles `list`, `clear` logic.
+- `seed_controller.py`
+  - Handles seed workflow.
+- `schedule_controller.py`
+  - Handles iTBS scheduling workflow.
+- `seed_data.py`
+  - Advanced seed dataset definition.
+
+### 7.2 `services/`
+
+Business logic and persistence operations.
+
+- `task_service.py`
+  - CRUD-style DB operations via SQLAlchemy sessions.
+- `scheduler_service.py`
+  - iTBS algorithm implementation (`schedule_itbs`).
+
+### 7.3 `views/`
+
+Rendering/output layer only.
+
+- `task_view.py`: task list and empty-state output.
+- `seed_view.py`: seed status messages.
+- `clear_view.py`: clear status messages.
+- `schedule_view.py`: schedule text rendering + Gantt image generation.
+
+### 7.4 `data/`
+
+Database setup and ORM base.
+
+- `database.py`
+  - engine/session factory
+  - metadata initialization (`init_db()`)
+
+## 8. iTBS Summary
+
+Implemented rule:
+
+`d_i = max(r_i, d_(i-1)) + C_i / U_s`
+
+Where:
+- `r_i` = arrival/release time
+- `C_i` = execution time
+- `U_s` = server bandwidth
+- `d_i` = assigned deadline
+
+Optional behavior:
+- Idle-time reclaim can be disabled with `--no-reclaim`.
+
+## 9. Typical Workflow
+
+```bash
+python main.py clear
+python main.py seed
+python main.py list
+python main.py schedule -a itbs -u 0.55 --plot gantt --plot-file plots/run1.png
+```
+
+## 10. Output Files
+
+- Database: `tasks.db` (project root)
+- Plot files: user-defined via `--plot-file` (default: `schedule_gantt.png`)
+
+## 11. Troubleshooting
+
+### 11.1 No tasks found
+
+Run:
+
+```bash
+python main.py seed
+```
+
+### 11.2 Replace old data with fresh seed
+
+Run:
+
+```bash
+python main.py seed --force
+```
+
+### 11.3 Plot not generated where expected
+
+Use an explicit path and check output message:
+
+```bash
+python main.py schedule -a itbs --plot gantt --plot-file plots/check.png
+```
+
+The CLI prints the absolute path of the saved image.
+
+## 12. Future Extension Ideas
+
+- Add more scheduling algorithms (e.g., CBS variants, EDF baseline traces).
+- Add import/export for workload profiles.
+- Add response-time and deadline-miss statistics report command.
+- Add tests for controller flows and scheduler edge cases.
