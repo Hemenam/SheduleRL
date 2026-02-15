@@ -1,15 +1,25 @@
 from pathlib import Path
 
-from services import ITBSJob, TaskService, schedule_itbs
+
+def render_schedule(results, task_name_by_id: dict[str, str], algorithm: str, bandwidth: float) -> None:
+    print(f"Schedule algorithm: {algorithm.upper()} (U_s={bandwidth:.3f})")
+    for row in results:
+        name = task_name_by_id[row.job_id]
+        print(
+            f"[{row.job_id}] {name} | "
+            f"r={row.arrival_time:.2f}, C={row.execution_time:.2f}, "
+            f"d={row.assigned_deadline:.2f}, "
+            f"svc=[{row.service_start_time:.2f}, {row.service_finish_time:.2f}]"
+        )
 
 
-def _render_gantt_plot(
+def save_gantt_plot(
     results,
     task_name_by_id: dict[str, str],
     output_path: str,
     algorithm: str,
     bandwidth: float,
-) -> None:
+) -> Path:
     import matplotlib.pyplot as plt
 
     fig_height = max(4, len(results) * 0.55)
@@ -50,70 +60,3 @@ def _render_gantt_plot(
     fig.savefig(output, dpi=150)
     plt.close(fig)
     return output
-
-
-def schedule_view(
-    task_service: TaskService,
-    algorithm: str,
-    bandwidth: float = 0.5,
-    reclaim_idle_time: bool = True,
-    plot: str | None = None,
-    plot_file: str = "schedule_gantt.png",
-) -> int:
-    tasks = task_service.list_tasks()
-    if not tasks:
-        print("No aperiodic tasks found. Run `python main.py seed` first.")
-        return 0
-
-    if algorithm != "itbs":
-        raise ValueError(f"Unsupported algorithm: {algorithm}")
-
-    jobs: list[ITBSJob] = []
-    task_name_by_id: dict[str, str] = {}
-
-    for task in tasks:
-        execution_time = float(task.wcet)
-        if execution_time <= 0.0:
-            raise ValueError(
-                f"Task {task.id} ('{task.name}') has invalid wcet: must be > 0."
-            )
-
-        task_id = str(task.id)
-        task_name_by_id[task_id] = task.name
-        jobs.append(
-            ITBSJob(
-                job_id=task_id,
-                arrival_time=float(task.release_time),
-                execution_time=execution_time,
-            )
-        )
-
-    results = schedule_itbs(
-        jobs=jobs,
-        server_bandwidth=bandwidth,
-        reclaim_idle_time=reclaim_idle_time,
-    )
-
-    print(f"Schedule algorithm: {algorithm.upper()} (U_s={bandwidth:.3f})")
-    for row in results:
-        name = task_name_by_id[row.job_id]
-        print(
-            f"[{row.job_id}] {name} | "
-            f"r={row.arrival_time:.2f}, C={row.execution_time:.2f}, "
-            f"d={row.assigned_deadline:.2f}, "
-            f"svc=[{row.service_start_time:.2f}, {row.service_finish_time:.2f}]"
-        )
-
-    if plot is not None:
-        if plot != "gantt":
-            raise ValueError(f"Unsupported plot type: {plot}")
-        output = _render_gantt_plot(
-            results=results,
-            task_name_by_id=task_name_by_id,
-            output_path=plot_file,
-            algorithm=algorithm,
-            bandwidth=bandwidth,
-        )
-        print(f"Gantt plot saved to: {output}")
-
-    return len(results)

@@ -1,22 +1,8 @@
 import argparse
 
+from controllers import CommandController
 from data import SessionLocal, init_db
 from services import TaskService
-from views import clear_tasks_view, schedule_view, seed_tasks_view
-
-
-def list_tasks_view(task_service: TaskService) -> None:
-    tasks = task_service.list_tasks()
-    if not tasks:
-        print("No tasks found. Run `python main.py seed` to populate the database.")
-        return
-
-    for task in tasks:
-        period_display = "-" if task.period is None else f"{task.period:.2f}"
-        print(
-            f"[{task.id}] {task.name} | r={task.release_time:.2f}, C={task.wcet:.2f}, "
-            f"D={task.relative_deadline:.2f}, T={period_display}"
-        )
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -75,27 +61,8 @@ def main() -> None:
 
     with SessionLocal() as session:
         task_service = TaskService(session)
-
-        if args.command == "seed":
-            seed_tasks_view(task_service, force=args.force)
-            return
-
-        if args.command == "schedule":
-            schedule_view(
-                task_service=task_service,
-                algorithm=args.algorithm,
-                bandwidth=args.bandwidth,
-                reclaim_idle_time=not args.no_reclaim,
-                plot=args.plot,
-                plot_file=args.plot_file,
-            )
-            return
-
-        if args.command == "clear":
-            clear_tasks_view(task_service)
-            return
-
-        list_tasks_view(task_service)
+        controller = CommandController(task_service)
+        controller.execute(args)
 
 
 if __name__ == "__main__":

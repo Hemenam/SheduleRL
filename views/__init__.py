@@ -1,5 +1,15 @@
-from views.clear_view import clear_tasks_view
-from views.seed_view import seed_tasks_view
-from views.schedule_view import schedule_view
+from views.clear_view import render_clear_complete
+from views.schedule_view import render_schedule, save_gantt_plot
+from views.seed_view import render_seed_complete, render_seed_reset, render_seed_skipped
+from views.task_view import render_no_tasks, render_tasks
 
-__all__ = ["clear_tasks_view", "seed_tasks_view", "schedule_view"]
+__all__ = [
+    "render_clear_complete",
+    "render_schedule",
+    "save_gantt_plot",
+    "render_seed_complete",
+    "render_seed_reset",
+    "render_seed_skipped",
+    "render_no_tasks",
+    "render_tasks",
+]
