@@ -2,7 +2,7 @@ import argparse
 
 from data import SessionLocal, init_db
 from services import TaskService
-from views import schedule_view, seed_tasks_view
+from views import clear_tasks_view, schedule_view, seed_tasks_view
 
 
 def list_tasks_view(task_service: TaskService) -> None:
@@ -31,6 +31,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
 
     subparsers.add_parser("list", help="List tasks")
+    subparsers.add_parser("clear", help="Delete all tasks from the database")
 
     schedule_parser = subparsers.add_parser("schedule", help="Build a schedule from tasks")
     schedule_parser.add_argument(
@@ -75,6 +76,10 @@ def main() -> None:
                 bandwidth=args.bandwidth,
                 reclaim_idle_time=not args.no_reclaim,
             )
+            return
+
+        if args.command == "clear":
+            clear_tasks_view(task_service)
             return
 
         list_tasks_view(task_service)
