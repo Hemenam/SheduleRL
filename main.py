@@ -12,11 +12,15 @@ def list_tasks_view(task_service: TaskService) -> None:
         return
 
     for task in tasks:
-        print(f"[{task.id}] {task.name} ({task.start}-{task.end})")
+        period_display = "-" if task.period is None else f"{task.period:.2f}"
+        print(
+            f"[{task.id}] {task.name} | r={task.release_time:.2f}, C={task.wcet:.2f}, "
+            f"D={task.relative_deadline:.2f}, T={period_display}"
+        )
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="ScheduRL task CLI")
+    parser = argparse.ArgumentParser(description="ScheduRL real-time workload CLI")
     subparsers = parser.add_subparsers(dest="command")
 
     seed_parser = subparsers.add_parser("seed", help="Populate database with sample tasks")

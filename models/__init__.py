@@ -1,3 +1,3 @@
-from models.task import Task
+from models.task import RealTimeTask
 
-__all__ = ["Task"]
+__all__ = ["RealTimeTask"]

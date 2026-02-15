@@ -9,7 +9,7 @@ def schedule_view(
 ) -> int:
     tasks = task_service.list_tasks()
     if not tasks:
-        print("No tasks found. Run `python main.py seed` first.")
+        print("No aperiodic tasks found. Run `python main.py seed` first.")
         return 0
 
     if algorithm != "itbs":
@@ -19,10 +19,10 @@ def schedule_view(
     task_name_by_id: dict[str, str] = {}
 
     for task in tasks:
-        execution_time = float(task.end - task.start)
-        if execution_time <= 0:
+        execution_time = float(task.wcet)
+        if execution_time <= 0.0:
             raise ValueError(
-                f"Task {task.id} ('{task.name}') has invalid window: end must be > start."
+                f"Task {task.id} ('{task.name}') has invalid wcet: must be > 0."
             )
 
         task_id = str(task.id)
@@ -30,7 +30,7 @@ def schedule_view(
         jobs.append(
             ITBSJob(
                 job_id=task_id,
-                arrival_time=float(task.start),
+                arrival_time=float(task.release_time),
                 execution_time=execution_time,
             )
         )
