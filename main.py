@@ -1,23 +1,49 @@
+import argparse
+
 from data import SessionLocal, init_db
 from services import TaskService
+from views import seed_tasks_view
+
+
+def list_tasks_view(task_service: TaskService) -> None:
+    tasks = task_service.list_tasks()
+    if not tasks:
+        print("No tasks found. Run `python main.py seed` to populate the database.")
+        return
+
+    for task in tasks:
+        print(f"[{task.id}] {task.name} ({task.start}-{task.end})")
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="ScheduRL task CLI")
+    subparsers = parser.add_subparsers(dest="command")
+
+    seed_parser = subparsers.add_parser("seed", help="Populate database with sample tasks")
+    seed_parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Append seed tasks even when tasks already exist.",
+    )
+
+    subparsers.add_parser("list", help="List tasks")
+    return parser
 
 
 def main() -> None:
+    parser = build_parser()
+    args = parser.parse_args()
+
     init_db()
 
     with SessionLocal() as session:
         task_service = TaskService(session)
 
-        if not task_service.list_tasks():
-            task_service.create_task(
-                name="Prepare weekly schedule",
-                description="Collect all course deadlines and lab sessions.",
-                start=9,
-                end=11,
-            )
+        if args.command == "seed":
+            seed_tasks_view(task_service, force=args.force)
+            return
 
-        for task in task_service.list_tasks():
-            print(f"[{task.id}] {task.name} ({task.start}-{task.end})")
+        list_tasks_view(task_service)
 
 
 if __name__ == "__main__":
