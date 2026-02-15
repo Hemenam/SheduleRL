@@ -1,0 +1,17 @@
+# virtual environment dirs
+.env/
+.venv/
+venv/
+
+# sqlite db files
+**/*.db
+**/*.sqlite
+**/*.sqlite3
+
+# ide files
+.idea/
+.vs/
+vs/
+vscode/
+.vscode/
+.ropeproject/
