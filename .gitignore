@@ -18,3 +18,7 @@ vscode/
 
 # app specific stuff
 plots/
+
+**/*.pyc
+**/*.pyo
+**/__pycache__/
