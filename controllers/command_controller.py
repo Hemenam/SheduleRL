@@ -22,6 +22,7 @@ class CommandController:
             self.schedule_controller.schedule(
                 algorithm=args.algorithm,
                 bandwidth=args.bandwidth,
+                bandwidths=args.bandwidths,
                 reclaim_idle_time=not args.no_reclaim,
                 plot=args.plot,
                 plot_file=args.plot_file,

@@ -12,6 +12,8 @@ class ITBSJob:
 @dataclass(frozen=True)
 class ITBSScheduleResult:
     job_id: str
+    server_id: int
+    server_bandwidth: float
     arrival_time: float
     execution_time: float
     assigned_deadline: float
@@ -21,7 +23,8 @@ class ITBSScheduleResult:
 
 def schedule_itbs(
     jobs: Iterable[ITBSJob],
-    server_bandwidth: float,
+    server_bandwidth: float | None = None,
+    server_bandwidths: Iterable[float] | None = None,
     initial_deadline: float = 0.0,
     reclaim_idle_time: bool = True,
 ) -> list[ITBSScheduleResult]:
@@ -34,14 +37,24 @@ def schedule_itbs(
     With `reclaim_idle_time=True`, the virtual server deadline is reset when the
     server has been idle, allowing the server to reclaim slack before the next job.
     """
-    if server_bandwidth <= 0.0 or server_bandwidth > 1.0:
-        raise ValueError("server_bandwidth must be in (0, 1].")
+    normalized_bandwidths: list[float] = []
+    if server_bandwidths is not None:
+        normalized_bandwidths = [float(value) for value in server_bandwidths]
+    elif server_bandwidth is not None:
+        normalized_bandwidths = [float(server_bandwidth)]
+
+    if not normalized_bandwidths:
+        raise ValueError("At least one server bandwidth must be provided.")
+
+    for bw in normalized_bandwidths:
+        if bw <= 0.0 or bw > 1.0:
+            raise ValueError("Each server bandwidth must be in (0, 1].")
 
     sorted_jobs = sorted(jobs, key=lambda job: (job.arrival_time, job.job_id))
     results: list[ITBSScheduleResult] = []
 
-    previous_virtual_deadline = float(initial_deadline)
-    previous_finish_time = 0.0
+    previous_virtual_deadlines = [float(initial_deadline)] * len(normalized_bandwidths)
+    previous_finish_times = [0.0] * len(normalized_bandwidths)
 
     for job in sorted_jobs:
         if job.execution_time <= 0.0:
@@ -50,11 +63,23 @@ def schedule_itbs(
         if job.arrival_time < 0.0:
             raise ValueError(f"arrival_time must be >= 0 for job '{job.job_id}'.")
 
+        selected_server_id = min(
+            range(len(normalized_bandwidths)),
+            key=lambda server_id: (
+                max(job.arrival_time, previous_finish_times[server_id]),
+                previous_virtual_deadlines[server_id],
+                server_id,
+            ),
+        )
+        selected_bandwidth = normalized_bandwidths[selected_server_id]
+        previous_virtual_deadline = previous_virtual_deadlines[selected_server_id]
+        previous_finish_time = previous_finish_times[selected_server_id]
+
         if reclaim_idle_time and job.arrival_time > previous_finish_time:
             previous_virtual_deadline = max(initial_deadline, job.arrival_time)
 
         virtual_start = max(job.arrival_time, previous_virtual_deadline)
-        assigned_deadline = virtual_start + (job.execution_time / server_bandwidth)
+        assigned_deadline = virtual_start + (job.execution_time / selected_bandwidth)
 
         service_start = max(job.arrival_time, previous_finish_time)
         service_finish = service_start + job.execution_time
@@ -62,6 +87,8 @@ def schedule_itbs(
         results.append(
             ITBSScheduleResult(
                 job_id=job.job_id,
+                server_id=selected_server_id,
+                server_bandwidth=selected_bandwidth,
                 arrival_time=job.arrival_time,
                 execution_time=job.execution_time,
                 assigned_deadline=assigned_deadline,
@@ -70,7 +97,7 @@ def schedule_itbs(
             )
         )
 
-        previous_virtual_deadline = assigned_deadline
-        previous_finish_time = service_finish
+        previous_virtual_deadlines[selected_server_id] = assigned_deadline
+        previous_finish_times[selected_server_id] = service_finish
 
     return results

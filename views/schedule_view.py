@@ -1,12 +1,21 @@
 from pathlib import Path
 
 
-def render_schedule(results, task_name_by_id: dict[str, str], algorithm: str, bandwidth: float) -> None:
-    print(f"Schedule algorithm: {algorithm.upper()} (U_s={bandwidth:.3f})")
+def _format_bandwidths(bandwidths: list[float]) -> str:
+    if len(bandwidths) == 1:
+        return f"U_s={bandwidths[0]:.3f}"
+    values = ", ".join(f"S{server_id}:{bandwidth:.3f}" for server_id, bandwidth in enumerate(bandwidths))
+    return f"U_s=[{values}]"
+
+
+def render_schedule(
+    results, task_name_by_id: dict[str, str], algorithm: str, bandwidths: list[float]
+) -> None:
+    print(f"Schedule algorithm: {algorithm.upper()} ({_format_bandwidths(bandwidths)})")
     for row in results:
         name = task_name_by_id[row.job_id]
         print(
-            f"[{row.job_id}] {name} | "
+            f"[{row.job_id}] {name} | S={row.server_id}, "
             f"r={row.arrival_time:.2f}, C={row.execution_time:.2f}, "
             f"d={row.assigned_deadline:.2f}, "
             f"svc=[{row.service_start_time:.2f}, {row.service_finish_time:.2f}]"
@@ -18,7 +27,7 @@ def save_gantt_plot(
     task_name_by_id: dict[str, str],
     output_path: str,
     algorithm: str,
-    bandwidth: float,
+    bandwidths: list[float],
 ) -> Path:
     import matplotlib.pyplot as plt
 
@@ -31,7 +40,7 @@ def save_gantt_plot(
     for i, row in enumerate(results):
         y = i * 10
         duration = row.service_finish_time - row.service_start_time
-        label = f"[{row.job_id}] {task_name_by_id[row.job_id]}"
+        label = f"S{row.server_id} [{row.job_id}] {task_name_by_id[row.job_id]}"
 
         ax.broken_barh(
             [(row.service_start_time, duration)],
@@ -50,7 +59,7 @@ def save_gantt_plot(
     ax.set_yticklabels(y_labels)
     ax.set_xlabel("Time")
     ax.set_ylabel("Aperiodic Jobs")
-    ax.set_title(f"{algorithm.upper()} Schedule Gantt (U_s={bandwidth:.3f})")
+    ax.set_title(f"{algorithm.upper()} Schedule Gantt ({_format_bandwidths(bandwidths)})")
     ax.grid(axis="x", linestyle="--", alpha=0.35)
     ax.margins(x=0.02)
 

@@ -5,6 +5,14 @@ from data import SessionLocal, init_db
 from services import TaskService
 
 
+def _parse_bandwidths(value: str) -> list[float]:
+    parts = [part.strip() for part in value.split(",")]
+    bandwidths = [float(part) for part in parts if part]
+    if not bandwidths:
+        raise argparse.ArgumentTypeError("Provide one or more comma-separated bandwidth values.")
+    return bandwidths
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="ScheduRL real-time workload CLI")
     subparsers = parser.add_subparsers(dest="command")
@@ -32,7 +40,13 @@ def build_parser() -> argparse.ArgumentParser:
         "--bandwidth",
         type=float,
         default=0.5,
-        help="Server bandwidth U_s for iTBS in (0, 1].",
+        help="Single-server bandwidth U_s for iTBS in (0, 1].",
+    )
+    schedule_parser.add_argument(
+        "--bandwidths",
+        type=_parse_bandwidths,
+        default=None,
+        help="Comma-separated server bandwidths for multi-server iTBS (e.g. 0.4,0.6).",
     )
     schedule_parser.add_argument(
         "--no-reclaim",

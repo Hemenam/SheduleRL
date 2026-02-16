@@ -114,7 +114,8 @@ python main.py schedule -a itbs
 ```
 
 Options:
-- `-u`, `--bandwidth`: iTBS server bandwidth `U_s` in `(0, 1]`.
+- `-u`, `--bandwidth`: single iTBS server bandwidth `U_s` in `(0, 1]`.
+- `--bandwidths`: comma-separated iTBS server bandwidths for multi-server mode (example: `0.4,0.6`).
 - `--no-reclaim`: disable idle-time reclaim behavior.
 - `--plot gantt`: generate Gantt chart.
 - `--plot-file <path>`: output image path.
@@ -123,6 +124,7 @@ Examples:
 
 ```bash
 python main.py schedule -a itbs -u 0.55
+python main.py schedule -a itbs --bandwidths 0.35,0.45,0.20
 python main.py schedule -a itbs --no-reclaim
 python main.py schedule -a itbs --plot gantt --plot-file plots/itbs_gantt.png
 ```
@@ -192,7 +194,13 @@ Database setup and ORM base.
 
 Implemented rule:
 
+Single server:
 `d_i = max(r_i, d_(i-1)) + C_i / U_s`
+
+Multi-server:
+- Each server keeps its own virtual deadline timeline.
+- Each incoming job is assigned to the earliest-available server.
+- Deadline assignment then uses that server's bandwidth.
 
 Where:
 - `r_i` = arrival/release time

@@ -39,6 +39,23 @@ class TestSchedulerService(unittest.TestCase):
         with self.assertRaises(ValueError):
             schedule_itbs(jobs, server_bandwidth=1.1)
 
+        with self.assertRaises(ValueError):
+            schedule_itbs(jobs, server_bandwidths=[0.5, 1.2])
+
+    def test_schedule_itbs_multiple_servers_assigns_earliest_available(self) -> None:
+        jobs = [
+            ITBSJob(job_id="a", arrival_time=0.0, execution_time=2.0),
+            ITBSJob(job_id="b", arrival_time=0.0, execution_time=1.0),
+            ITBSJob(job_id="c", arrival_time=1.0, execution_time=1.0),
+        ]
+
+        results = schedule_itbs(jobs, server_bandwidths=[0.5, 0.5])
+
+        self.assertEqual([(r.job_id, r.server_id) for r in results], [("a", 0), ("b", 1), ("c", 1)])
+        self.assertAlmostEqual(results[0].service_start_time, 0.0)
+        self.assertAlmostEqual(results[1].service_start_time, 0.0)
+        self.assertAlmostEqual(results[2].service_start_time, 1.0)
+
 
 if __name__ == "__main__":
     unittest.main()

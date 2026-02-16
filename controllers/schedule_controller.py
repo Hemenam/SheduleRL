@@ -10,6 +10,7 @@ class ScheduleController:
         self,
         algorithm: str,
         bandwidth: float = 0.5,
+        bandwidths: list[float] | None = None,
         reclaim_idle_time: bool = True,
         plot: str | None = None,
         plot_file: str = "schedule_gantt.png",
@@ -42,9 +43,11 @@ class ScheduleController:
                 )
             )
 
+        selected_bandwidths = bandwidths if bandwidths else [bandwidth]
+
         results = schedule_itbs(
             jobs=jobs,
-            server_bandwidth=bandwidth,
+            server_bandwidths=selected_bandwidths,
             reclaim_idle_time=reclaim_idle_time,
         )
 
@@ -52,7 +55,7 @@ class ScheduleController:
             results=results,
             task_name_by_id=task_name_by_id,
             algorithm=algorithm,
-            bandwidth=bandwidth,
+            bandwidths=selected_bandwidths,
         )
 
         if plot is not None:
@@ -63,7 +66,7 @@ class ScheduleController:
                 task_name_by_id=task_name_by_id,
                 output_path=plot_file,
                 algorithm=algorithm,
-                bandwidth=bandwidth,
+                bandwidths=selected_bandwidths,
             )
             print(f"Gantt plot saved to: {output}")
 
