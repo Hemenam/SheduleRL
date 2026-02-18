@@ -156,13 +156,15 @@ JSON input format (use with `--json`):
 {
   "transfer_overhead": 0.2,
   "reclaim_idle_time": true,
-  "devices": [{ "device_id": 0 }, { "device_id": 1 }],
+  "simulation_horizon": 6.0,
+  "jobs_per_device": 20,
   "servers": [{ "server_id": 0, "bandwidth": 0.5 }],
-  "tasks": [
+  "periodic_tasks": [
     {
-      "task_id": "t1",
+      "task_id": "dev0",
       "name": "Sensor sync",
-      "release_time": 0.0,
+      "release_offset": 0.0,
+      "period": 1.0,
       "execution_time": 1.0,
       "assigned_device_id": 0
     }
@@ -172,7 +174,9 @@ JSON input format (use with `--json`):
 
 Notes:
 - `devices` is optional; if omitted, devices are inferred from task assignments.
-- `servers` and `tasks` are required.
+- Provide either `tasks` (explicit arrivals) or `periodic_tasks` (expanded up to `simulation_horizon`).
+- `servers` is required.
+- `jobs_per_device` defaults to 20 if omitted.
 - When `--json` is provided, JSON values override CLI flags for bandwidth, `-k`, `-t`, and `--no-reclaim`.
 
 ## 6. Data Model

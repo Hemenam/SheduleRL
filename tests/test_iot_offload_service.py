@@ -103,6 +103,36 @@ class TestIoTOffloading(unittest.TestCase):
         self.assertEqual(len(servers), 1)
         self.assertEqual(len(tasks), 1)
 
+    def test_load_periodic_tasks_expands_jobs(self) -> None:
+        payload = {
+            "transfer_overhead": 0.1,
+            "simulation_horizon": 3.0,
+            "jobs_per_device": 20,
+            "servers": [{"server_id": 0, "bandwidth": 0.5}],
+            "periodic_tasks": [
+                {
+                    "task_id": "dev0",
+                    "name": "Periodic",
+                    "release_offset": 0.0,
+                    "period": 1.0,
+                    "execution_time": 0.2,
+                    "assigned_device_id": 0,
+                }
+            ],
+        }
+
+        with tempfile.TemporaryDirectory() as tempdir:
+            path = Path(tempdir) / "input.json"
+            path.write_text(json.dumps(payload))
+            devices, servers, tasks, overhead, reclaim = load_iot_simulation(str(path))
+
+        self.assertEqual(overhead, 0.1)
+        self.assertTrue(reclaim)
+        self.assertEqual(len(devices), 1)
+        self.assertEqual(len(servers), 1)
+        self.assertEqual(len(tasks), 4)
+        self.assertEqual([t.release_time for t in tasks], [0.0, 1.0, 2.0, 3.0])
+
 
 if __name__ == "__main__":
     unittest.main()
