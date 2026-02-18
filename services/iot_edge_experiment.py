@@ -687,9 +687,11 @@ def _save_charts(
     output_paths.append(summary)
     return output_paths
 
+import random
+from pathlib import Path
 
-def run_iot_edge_experiment(mode: str, vars_n: int, alg: str, seed: int = 7) -> dict[str, object]:
-    if alg not in {"none", "gen", "rl"}:
+def run_iot_edge_experiment(mode: str, vars_n: int, alg: str | None = None, seed: int = 7) -> dict[str, object]:
+    if alg is not None and alg not in {"none", "gen", "rl"}:
         raise ValueError("--alg must be one of: none, gen, rl")
 
     rng = random.Random(seed)
@@ -701,58 +703,31 @@ def run_iot_edge_experiment(mode: str, vars_n: int, alg: str, seed: int = 7) -> 
     hard_sched_rate, offline_segments = _offline_phase(periodic_tasks, device_count=len(devices))
     soft_tasks = _generate_soft_tasks(devices=devices, rng=rng, load_scale=1.0)
 
-    run_none, rec_none = _simulate(
-        algorithm="none",
-        devices=devices,
-        servers=servers,
-        connectivity=connectivity,
-        offline_sched_rate=hard_sched_rate,
-        soft_tasks=soft_tasks,
-        rng=random.Random(seed + 11),
-    )
-    run_gen, rec_gen = _simulate(
-        algorithm="gen",
-        devices=devices,
-        servers=servers,
-        connectivity=connectivity,
-        offline_sched_rate=hard_sched_rate,
-        soft_tasks=soft_tasks,
-        rng=random.Random(seed + 13),
-    )
-    run_rl, rec_rl = _simulate(
-        algorithm="rl",
-        devices=devices,
-        servers=servers,
-        connectivity=connectivity,
-        offline_sched_rate=hard_sched_rate,
-        soft_tasks=soft_tasks,
-        rng=random.Random(seed + 17),
-    )
+    if alg is None:
+        target_algs = ["none", "gen", "rl"]
+        is_comparison = True
+    else:
+        target_algs = [alg]
+        is_comparison = False
 
-    metrics_map = {"none": run_none, "gen": run_gen, "rl": run_rl}
-    records_map = {"none": rec_none, "gen": rec_gen, "rl": rec_rl}
-    selected_metrics = metrics_map[alg]
-    selected_records = records_map[alg]
-
-    qos_vs_load: dict[str, list[tuple[float, float]]] = {"none": [], "gen": [], "rl": []}
-    for scale in [0.6, 0.8, 1.0, 1.2, 1.4]:
-        periodic = _generate_periodic_tasks(devices=devices, rng=rng, load_scale=scale)
-        hard_rate, _ = _offline_phase(periodic, device_count=len(devices))
-        soft = _generate_soft_tasks(devices=devices, rng=rng, load_scale=scale)
-        for name in ("none", "gen", "rl"):
-            m, _ = _simulate(
-                algorithm=name,
-                devices=devices,
-                servers=servers,
-                connectivity=connectivity,
-                offline_sched_rate=hard_rate,
-                soft_tasks=soft,
-                rng=random.Random(seed + int(scale * 100) + (0 if name == "none" else 7 if name == "gen" else 14)),
-            )
-            qos_vs_load[name].append((scale, m.soft_deadline_success_rate))
+    results_registry = {}
+    alg_seed_offsets = {"none": 11, "gen": 13, "rl": 17}
+    
+    for current_alg in target_algs:
+        metrics, records = _simulate(
+            algorithm=current_alg,
+            devices=devices,
+            servers=servers,
+            connectivity=connectivity,
+            offline_sched_rate=hard_sched_rate,
+            soft_tasks=soft_tasks,
+            rng=random.Random(seed + alg_seed_offsets[current_alg]),
+        )
+        results_registry[current_alg] = (metrics, records)
 
     output_dir = (Path("plots") / f"{mode}_vars{vars_n}").resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
+    
     table_path = _save_task_spec_table(
         output_dir=output_dir,
         mode=mode,
@@ -761,30 +736,71 @@ def run_iot_edge_experiment(mode: str, vars_n: int, alg: str, seed: int = 7) -> 
         periodic_tasks=periodic_tasks,
         soft_tasks=soft_tasks,
     )
-    chart_paths = _save_charts(
-        output_dir=output_dir,
-        selected=selected_metrics,
-        baseline_none=run_none,
-        baseline_gen=run_gen,
-        proposed_rl=run_rl,
-        qos_vs_load=qos_vs_load,
-    )
-    sched_chart = _save_scheduling_chart(
-        output_dir=output_dir,
-        offline_segments=offline_segments,
-        selected_records=selected_records,
-        selected_alg=alg,
-    )
+
+    generated_files = [str(table_path)]
+
+    if is_comparison:
+        qos_vs_load: dict[str, list[tuple[float, float]]] = {"none": [], "gen": [], "rl": []}
+        
+        for scale in [0.6, 0.8, 1.0, 1.2, 1.4]:
+            p_tasks = _generate_periodic_tasks(devices=devices, rng=rng, load_scale=scale)
+            h_rate, _ = _offline_phase(p_tasks, device_count=len(devices))
+            s_tasks = _generate_soft_tasks(devices=devices, rng=rng, load_scale=scale)
+            
+            for name in ("none", "gen", "rl"):
+                m, _ = _simulate(
+                    algorithm=name,
+                    devices=devices,
+                    servers=servers,
+                    connectivity=connectivity,
+                    offline_sched_rate=h_rate,
+                    soft_tasks=s_tasks,
+                    rng=random.Random(seed + int(scale * 100) + alg_seed_offsets[name]),
+                )
+                qos_vs_load[name].append((scale, m.soft_deadline_success_rate))
+
+        chart_paths = _save_charts(
+            output_dir=output_dir,
+            selected=results_registry["rl"][0],
+            baseline_none=results_registry["none"][0],
+            baseline_gen=results_registry["gen"][0],
+            proposed_rl=results_registry["rl"][0],
+            qos_vs_load=qos_vs_load,
+        )
+        generated_files.extend([str(p) for p in chart_paths])
+
+        sched_chart = _save_scheduling_chart(
+            output_dir=output_dir,
+            offline_segments=offline_segments,
+            selected_records=results_registry["rl"][1],
+            selected_alg="rl",
+        )
+        generated_files.append(str(sched_chart))
+        
+        selected_metrics = results_registry["rl"][0]
+        final_alg_name = "comparison(rl-focused)"
+    else:
+        metrics, records = results_registry[alg]
+        sched_chart = _save_scheduling_chart(
+            output_dir=output_dir,
+            offline_segments=offline_segments,
+            selected_records=records,
+            selected_alg=alg,
+        )
+        generated_files.append(str(sched_chart))
+        
+        selected_metrics = metrics
+        final_alg_name = alg
 
     return {
         "mode": mode,
         "vars": vars_n,
-        "alg": alg,
+        "alg": final_alg_name,
         "devices": len(devices),
         "servers": len(servers),
         "periodic_tasks": len(periodic_tasks),
         "soft_tasks": len(soft_tasks),
         "selected_metrics": selected_metrics,
-        "generated_files": [str(p) for p in [table_path, *chart_paths, sched_chart]],
+        "generated_files": generated_files,
         "output_dir": str(output_dir),
     }

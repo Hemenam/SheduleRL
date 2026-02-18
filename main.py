@@ -1,4 +1,5 @@
 import argparse
+from html import parser
 
 from controllers import CommandController
 from data import SessionLocal, init_db
@@ -28,11 +29,12 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Variable entity count (devices for staticserver mode, servers for iot mode).",
     )
+    # In main.py, update the build_parser function:
     parser.add_argument(
         "--alg",
         choices=["none", "gen", "rl"],
-        default="none",
-        help="Online decision algorithm: none (local), gen (GA), rl (Q-learning).",
+        default=None,  
+        help="Online decision algorithm. If empty, runs all for comparison.",
     )
 
     subparsers = parser.add_subparsers(dest="command")
