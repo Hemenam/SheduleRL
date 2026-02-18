@@ -1,344 +1,124 @@
-# ScheduRL
+========================================================================
+ScheduRL: IoT-Edge Task Offloading & RL Scheduling Framework
+========================================================================
 
-ScheduRL is a command-line real-time scheduling sandbox focused on aperiodic workload management with iTBS (Improved Total Bandwidth Server).
+ScheduRL is a research-oriented sandbox for simulating real-time task
+scheduling in IoT-Edge environments. It compares traditional baselines
+against Genetic Algorithms (GA) and Reinforcement Learning (Q-Learning)
+to optimize task offloading and deadline success rates.
 
-It provides:
-- SQLite persistence for task/workload data.
-- ORM-based data access with SQLAlchemy.
-- CLI commands for seeding, listing, clearing, and scheduling.
-- IoT offloading simulation with device-local execution or edge server scheduling.
-- Optional Gantt chart rendering for schedule visualization.
+---
 
-## 1. Project Purpose
+1. CORE CAPABILITIES
 
-This project is designed for experimenting with real-time scheduling behavior using an aperiodic task model.
+---
 
-Core goals:
-- Model aperiodic workloads with release times, execution budgets, and deadlines.
-- Run iTBS assignment and inspect generated service intervals/deadlines.
-- Visualize execution timelines with a generated Gantt plot.
+- Hybrid Workloads: Supports both Periodic (hard real-time) and
+  Soft (aperiodic) tasks.
+- Offline/Online Phases: Uses EDF for local periodic tasks and
+  intelligent offloading for dynamic soft-task arrivals.
+- Multi-Algorithm Support:
+  - NONE: Local-only execution (Baseline).
+  - GEN: Genetic Algorithm-based offloading optimization.
+  - RL: Q-Learning agent that learns offloading policies.
+- Scalability Testing: Automated modes to stress-test by varying
+  the number of IoT devices or Edge Servers.
 
-## 2. Tech Stack
+---
 
-- Python 3.14
-- SQLite (database file at project root: `tasks.db`)
-- SQLAlchemy 2.x (ORM)
-- Matplotlib (optional plotting)
+2. INSTALLATION
 
-## 3. Installation
+---
 
-### 3.1 Clone / Open Project
+# 1. Clone the repository
 
-```bash
-cd /path/to/ScheduRL
-```
+cd ScheduRL
 
-### 3.2 Create Virtual Environment
+# 2. Setup virtual environment
 
-```bash
 python -m venv venv
-source venv/bin/activate
-```
+source venv/bin/activate # Windows: venv\Scripts\activate
 
-### 3.3 Install Dependencies
+# 3. Install dependencies
 
-```bash
 pip install -r requirements.txt
-```
 
-## 4. Running the CLI
+---
 
-All commands are run through `main.py`:
+3. EXPERIMENT MODES
 
-```bash
-python main.py <command> [options]
-```
+---
 
-If no command is provided, default behavior is equivalent to `list`.
+The framework operates in two primary experimental modes:
 
-Project experiment command (IoT-Edge scheduling framework):
+A. Static Server Mode (--mode staticserver)
 
-```bash
-python main.py --mode [staticserver|iot] --vars [N] --alg [none|gen|rl]
-```
+- Fixed: 5 Edge Servers.
+- Variable (--vars N): N number of IoT devices.
+- Goal: Test system performance under high device density.
 
-Behavior:
-- `--mode staticserver`: fixed 5 edge servers, variable IoT device count from `--vars`.
-- `--mode iot`: fixed 100 IoT devices, variable edge server count from `--vars`.
-- Range constraints:
-  - `staticserver`: `--vars` in `[10, 50]`.
-  - `iot`: `--vars` in `[1, 20]`.
-- Offline phase: 20 periodic tasks per device, feasibility validation, EDF base schedule.
-- Online phase:
-  - `none`: local iTBS only.
-  - `gen`: GA-based local vs offload decision.
-  - `rl`: RL-based local vs offload decision.
-- Outputs per run under `plots/<mode>_vars<N>/`: 6 charts + 1 task specification table + 1 scheduling chart.
+B. IoT Fleet Mode (--mode iot)
 
-## 5. Commands Reference
+- Fixed: 100 IoT Devices.
+- Variable (--vars N): N number of Edge Servers.
+- Goal: Test infrastructure scalability.
 
-### 5.1 `seed`
+---
 
-Populate database with advanced aperiodic seed workload.
+4. USAGE EXAMPLES
 
-```bash
-python main.py seed
-```
+---
 
-Behavior:
-- If DB already has tasks, seed is skipped.
+# RUN A FULL COMPARISON (Benchmark Mode)
 
-Force replace existing data:
+# Runs None, GA, and RL algorithms across multiple load scales (0.6 to 1.4).
 
-```bash
-python main.py seed --force
-```
+# Generates comprehensive comparison charts in the /plots folder.
 
-Behavior with `--force`:
-- Clears all existing rows.
-- Inserts the full advanced seed set.
+python main.py --mode iot --vars 5
 
-### 5.2 `list`
+# RUN A SPECIFIC ALGORITHM (Focused Mode)
 
-Show all tasks in release-time order:
+# Runs ONLY the specified algorithm.
 
-```bash
+# Generates a detailed Scheduling Gantt chart and Task Specification table.
+
+python main.py --mode staticserver --vars 20 --alg rl
+
+# LIST CURRENT DATABASE TASKS
+
 python main.py list
-```
 
-Output fields:
-- `r`: release time
-- `C`: WCET / execution time
-- `D`: relative deadline
-- `T`: period (`-` for aperiodic dataset)
+# RESET ENVIRONMENT
 
-### 5.3 `clear`
-
-Delete all tasks from the database:
-
-```bash
 python main.py clear
-```
-
-### 5.4 `schedule`
-
-Run a scheduler on current tasks.
-
-Policy:
-- `schedule` command uses iTBS for aperiodic database tasks.
-- `offload` uses EDF on IoT devices for periodic jobs, and iTBS on edge servers for aperiodic offloaded jobs.
-
-Basic usage:
-
-```bash
-python main.py schedule
-```
-
-Options:
-- `-u`, `--bandwidth`: single iTBS server bandwidth `U_s` in `(0, 1]`.
-- `--bandwidths`: comma-separated iTBS server bandwidths for multi-server mode (example: `0.4,0.6`).
-- `--no-reclaim`: disable iTBS idle-time reclaim behavior.
-- `--plot gantt`: generate Gantt chart.
-- `--plot-file <path>`: output image path.
-
-Examples:
-
-```bash
-python main.py schedule -u 0.55
-python main.py schedule --bandwidths 0.35,0.45,0.20
-python main.py schedule --no-reclaim
-python main.py schedule --plot gantt --plot-file plots/itbs_gantt.png
-```
-
-### 5.5 `offload`
-
-Schedule IoT tasks with online offloading to edge servers.
-
-Rules:
-- There are `n` tasks and `n` IoT devices.
-- Each task is initially assigned to exactly one device.
-- If a task arrives when its device is idle, it executes locally on that device.
-- If the device is busy, the task is offloaded to one of `k` servers.
-- Offloaded tasks incur a constant transfer overhead `t`.
-
-Examples:
-
-```bash
-python main.py offload -u 0.55 -k 3 -t 0.2
-python main.py offload --bandwidths 0.35,0.45,0.20 -t 0.1
-python main.py offload -u 0.55 -k 2 -t 0.2 --plot gantt --plot-file plots/offload_gantt.png
-python main.py offload --json data/offload_sample.json
-```
-
-JSON input format (use with `--json`):
-
-```json
-{
-  "transfer_overhead": 0.2,
-  "reclaim_idle_time": true,
-  "simulation_horizon": 6.0,
-  "jobs_per_device": 20,
-  "servers": [{ "server_id": 0, "bandwidth": 0.5 }],
-  "periodic_tasks": [
-    {
-      "task_id": "dev0",
-      "name": "Sensor sync",
-      "release_offset": 0.0,
-      "period": 1.0,
-      "execution_time": 1.0,
-      "assigned_device_id": 0
-    }
-  ]
-}
-```
-
-Notes:
-- `devices` is optional; if omitted, devices are inferred from task assignments.
-- Provide either `tasks` (explicit arrivals) or `periodic_tasks` (expanded up to `simulation_horizon`).
-- `servers` is required.
-- `jobs_per_device` defaults to 20 if omitted.
-- When `--json` is provided, JSON values override CLI flags for bandwidth, `-k`, `-t`, and `--no-reclaim`.
-
-## 6. Data Model
-
-ORM entity: `RealTimeTask` (`models/task.py`)
-
-Columns:
-- `id` (PK)
-- `name`
-- `task_type` (default: `aperiodic`)
-- `release_time`
-- `wcet`
-- `relative_deadline`
-- `period` (nullable)
-- `description` (nullable)
-
-Note: current workflow treats all seeded tasks as aperiodic.
-
-Additional in-memory models for the offloading simulation (`models/iot.py`):
-- `IoTDevice` (device_id)
-- `EdgeServer` (server_id, bandwidth)
-- `IoTTask` (task_id, name, release_time, execution_time, assigned_device_id)
-
-## 7. Architecture Overview
-
-The code is split by responsibility.
-
-### 7.1 `controllers/`
-
-Command orchestration layer.
-
-- `command_controller.py`
-  - Thin command router/dispatcher.
-- `task_controller.py`
-  - Handles `list`, `clear` logic.
-- `seed_controller.py`
-  - Handles seed workflow.
-- `schedule_controller.py`
-  - Handles iTBS scheduling workflow.
-- `seed_data.py`
-  - Advanced seed dataset definition.
-
-### 7.2 `services/`
-
-Business logic and persistence operations.
-
-- `task_service.py`
-  - CRUD-style DB operations via SQLAlchemy sessions.
-- `scheduler_service.py`
-  - iTBS algorithm implementation (`schedule_itbs`).
-
-### 7.3 `views/`
-
-Rendering/output layer only.
-
-- `task_view.py`: task list and empty-state output.
-- `seed_view.py`: seed status messages.
-- `clear_view.py`: clear status messages.
-- `schedule_view.py`: schedule text rendering + Gantt image generation.
-
-### 7.4 `data/`
-
-Database setup and ORM base.
-
-- `database.py`
-  - engine/session factory
-  - metadata initialization (`init_db()`)
-
-## 8. iTBS Summary
-
-Implemented rule:
-
-Single server:
-`d_i = max(r_i, d_(i-1)) + C_i / U_s`
-
-Multi-server:
-- Each server keeps its own virtual deadline timeline.
-- Each incoming job is assigned to the earliest-available server.
-- Deadline assignment then uses that server's bandwidth.
-
-Where:
-- `r_i` = arrival/release time
-- `C_i` = execution time
-- `U_s` = server bandwidth
-- `d_i` = assigned deadline
-
-Optional behavior:
-- Idle-time reclaim can be disabled with `--no-reclaim`.
-
-## 9. IoT Offloading Summary
-
-Each task is assigned to a unique IoT device. At arrival time:
-- If the device is idle, the task runs locally.
-- If the device is busy, the task is offloaded to one of the edge servers.
-- Offloading adds a constant transfer overhead `t` to the service time.
-- Servers use iTBS to assign deadlines and schedule service.
-
-## 10. Typical Workflow
-
-```bash
-python main.py clear
-python main.py seed
-python main.py list
-python main.py schedule -u 0.55 --plot gantt --plot-file plots/run1.png
-```
-
-## 11. Output Files
-
-- Database: `tasks.db` (project root)
-- Plot files: user-defined via `--plot-file` (default: `schedule_gantt.png`)
-
-## 12. Troubleshooting
-
-### 12.1 No tasks found
-
-Run:
-
-```bash
-python main.py seed
-```
-
-### 12.2 Replace old data with fresh seed
-
-Run:
-
-```bash
 python main.py seed --force
-```
 
-### 11.3 Plot not generated where expected
+---
 
-Use an explicit path and check output message:
+5. OUTPUTS & VISUALIZATION
 
-```bash
-python main.py schedule --plot gantt --plot-file plots/check.png
-```
+---
 
-The CLI prints the absolute path of the saved image.
+All results are stored in the `/plots/{mode}_vars{N}/` directory:
 
-## 12. Future Extension Ideas
+- task_spec_table.csv: Technical specifications of all generated tasks.
+- scheduling*gantt*{alg}.png: A visual timeline of task execution.
+- comparison_charts.png: (Comparison mode only) Graphs for:
+  - Soft Deadline Success Rate
+  - Average Latency
+  - Success Rate vs. System Load
+  - Makespan / Resource Utilization
 
-- Add more scheduling algorithms (e.g., CBS variants).
-- Add import/export for workload profiles.
-- Add response-time and deadline-miss statistics report command.
-- Add tests for controller flows and scheduler edge cases.
+---
+
+6. PROJECT STRUCTURE
+
+---
+
+/controllers : CLI Command handling logic.
+/models : Data structures for IoT Devices, Servers, and Tasks.
+/services : Core simulation engine and RL/GA implementations.
+/views : Plotting and CLI output formatting.
+main.py : The primary entry point for the framework.
+========================================================================
