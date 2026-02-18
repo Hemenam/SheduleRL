@@ -1,9 +1,12 @@
-from models.iot import EdgeServer, IoTDevice, IoTTask
+import random
+
+from models.iot import EdgeServer, IoTDevice
 from services import (
     ITBSJob,
     TaskService,
+    generate_random_iot_workload,
     load_iot_simulation,
-    schedule_iot_offloading,
+    schedule_iot_offloading_online,
     schedule_itbs,
 )
 from views import render_iot_schedule, render_schedule, save_gantt_plot, save_iot_gantt_plot
@@ -84,6 +87,16 @@ class ScheduleController:
         bandwidth: float = 0.5,
         bandwidths: list[float] | None = None,
         servers: int = 1,
+        devices: int = 5,
+        fixed_iot_count: bool = True,
+        fixed_server_count: bool = True,
+        simulation_horizon: float = 30.0,
+        offline_period: float = 5.0,
+        aperiodic_min_per_device: int = 1,
+        aperiodic_max_per_device: int = 5,
+        online_tick: float = 1.0,
+        decision_budget: float = 0.01,
+        random_seed: int | None = None,
         transfer_overhead: float = 0.0,
         reclaim_idle_time: bool = True,
         plot: str | None = None,
@@ -94,51 +107,83 @@ class ScheduleController:
             devices, servers_list, iot_tasks, transfer_overhead, reclaim_idle_time = (
                 load_iot_simulation(json_path)
             )
+            offline_results = []
         else:
-            tasks = self.task_service.list_tasks()
-            if not tasks:
-                print("No aperiodic tasks found. Run `python main.py seed` first.")
-                return 0
+            rng = random.Random(random_seed)
+            if devices < 1:
+                raise ValueError("devices must be >= 1")
+            if servers < 1:
+                raise ValueError("servers must be >= 1")
 
             if bandwidths:
                 selected_bandwidths = bandwidths
             else:
-                if servers < 1:
-                    raise ValueError("servers must be >= 1")
-                selected_bandwidths = [bandwidth] * servers
+                server_count = servers if fixed_server_count else rng.randint(1, servers)
+                selected_bandwidths = [bandwidth] * server_count
 
-            devices = [IoTDevice(device_id=i) for i in range(len(tasks))]
+            device_count = devices if fixed_iot_count else rng.randint(1, devices)
+            devices = [IoTDevice(device_id=i) for i in range(device_count)]
             servers_list = [
                 EdgeServer(server_id=i, bandwidth=bw)
                 for i, bw in enumerate(selected_bandwidths)
             ]
-
-            tasks_by_id = sorted(tasks, key=lambda task: task.id)
-            iot_tasks = []
-            for idx, task in enumerate(tasks_by_id):
-                iot_tasks.append(
-                    IoTTask(
-                        task_id=str(task.id),
-                        name=task.name,
-                        release_time=float(task.release_time),
-                        execution_time=float(task.wcet),
-                        assigned_device_id=idx,
-                    )
+            periodic_tasks, iot_tasks = generate_random_iot_workload(
+                devices=devices,
+                simulation_horizon=simulation_horizon,
+                offline_period=offline_period,
+                aperiodic_min_per_device=aperiodic_min_per_device,
+                aperiodic_max_per_device=aperiodic_max_per_device,
+                seed=random_seed,
+            )
+            offline_jobs = [
+                ITBSJob(
+                    job_id=task.task_id,
+                    arrival_time=task.release_time,
+                    execution_time=task.execution_time,
                 )
+                for task in periodic_tasks
+            ]
+            offline_results = schedule_itbs(
+                jobs=offline_jobs,
+                server_bandwidths=[server.bandwidth for server in servers_list],
+                reclaim_idle_time=reclaim_idle_time,
+            )
 
-        results = schedule_iot_offloading(
+        if offline_results:
+            name_by_id = {task.task_id: task.name for task in periodic_tasks}
+            render_schedule(
+                results=offline_results,
+                task_name_by_id=name_by_id,
+                algorithm="itbs-offline",
+                bandwidths=[server.bandwidth for server in servers_list],
+            )
+            offline_plot_path = plot_file.replace(".png", "_offline.png")
+            output = save_gantt_plot(
+                results=offline_results,
+                task_name_by_id=name_by_id,
+                output_path=offline_plot_path,
+                algorithm="itbs-offline",
+                bandwidths=[server.bandwidth for server in servers_list],
+            )
+            print(f"Offline periodic Gantt plot saved to: {output}")
+
+        results = schedule_iot_offloading_online(
             tasks=iot_tasks,
             devices=devices,
             servers=servers_list,
             transfer_overhead=transfer_overhead,
+            tick_interval=online_tick,
+            decision_time=decision_budget,
             reclaim_idle_time=reclaim_idle_time,
         )
 
         render_iot_schedule(results=results)
 
-        if plot is not None:
+        should_plot = plot is not None or json_path is None
+        if should_plot:
             if plot != "gantt":
-                raise ValueError(f"Unsupported plot type: {plot}")
+                if plot is not None:
+                    raise ValueError(f"Unsupported plot type: {plot}")
             output = save_iot_gantt_plot(results=results, output_path=plot_file)
             print(f"Gantt plot saved to: {output}")
 

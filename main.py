@@ -108,13 +108,71 @@ def build_parser() -> argparse.ArgumentParser:
     offload_parser.add_argument(
         "--plot",
         choices=["gantt"],
-        default=None,
+        default="gantt",
         help="Render schedule plot.",
     )
     offload_parser.add_argument(
         "--plot-file",
         default="offload_gantt.png",
         help="Output file path for plot image.",
+    )
+    offload_parser.add_argument(
+        "--devices",
+        type=int,
+        default=5,
+        help="Maximum or fixed number of IoT devices (based on --fixed-iot-count).",
+    )
+    offload_parser.add_argument(
+        "--fixed-iot-count",
+        action="store_true",
+        help="Use exactly --devices (otherwise device count is random in [1, --devices]).",
+    )
+    offload_parser.add_argument(
+        "--fixed-server-count",
+        action="store_true",
+        help="Use exactly --servers (otherwise server count is random in [1, --servers]).",
+    )
+    offload_parser.add_argument(
+        "--horizon",
+        type=float,
+        default=30.0,
+        help="Simulation horizon for random offline/online workload generation.",
+    )
+    offload_parser.add_argument(
+        "--offline-period",
+        type=float,
+        default=5.0,
+        help="Offline periodic release period in seconds.",
+    )
+    offload_parser.add_argument(
+        "--aperiodic-min-per-device",
+        type=int,
+        default=1,
+        help="Minimum random aperiodic tasks per device in online phase.",
+    )
+    offload_parser.add_argument(
+        "--aperiodic-max-per-device",
+        type=int,
+        default=5,
+        help="Maximum random aperiodic tasks per device in online phase.",
+    )
+    offload_parser.add_argument(
+        "--online-tick",
+        type=float,
+        default=1.0,
+        help="Online scheduler procedure interval in seconds.",
+    )
+    offload_parser.add_argument(
+        "--decision-budget",
+        type=float,
+        default=0.01,
+        help="Decision time budget per procedure tick in seconds.",
+    )
+    offload_parser.add_argument(
+        "--random-seed",
+        type=int,
+        default=None,
+        help="Optional random seed for reproducible workload generation.",
     )
     return parser
 

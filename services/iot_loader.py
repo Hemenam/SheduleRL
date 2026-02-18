@@ -1,4 +1,5 @@
 import json
+import random
 from pathlib import Path
 
 from models.iot import EdgeServer, IoTDevice, IoTTask
@@ -134,3 +135,63 @@ def load_iot_simulation(
         servers.append(EdgeServer(server_id=server_id, bandwidth=bandwidth))
 
     return devices, servers, tasks, transfer_overhead, reclaim_idle_time
+
+
+def generate_random_iot_workload(
+    devices: list[IoTDevice],
+    simulation_horizon: float,
+    offline_period: float = 5.0,
+    aperiodic_min_per_device: int = 1,
+    aperiodic_max_per_device: int = 5,
+    seed: int | None = None,
+) -> tuple[list[IoTTask], list[IoTTask]]:
+    """
+    Build a two-phase workload:
+    - Offline phase: periodic jobs every `offline_period` seconds (with random offset/wcet).
+    - Online phase: random number of aperiodic jobs per device.
+    """
+    if simulation_horizon <= 0.0:
+        raise ValueError("simulation_horizon must be > 0.")
+    if offline_period <= 0.0:
+        raise ValueError("offline_period must be > 0.")
+    if aperiodic_min_per_device < 1:
+        raise ValueError("aperiodic_min_per_device must be >= 1.")
+    if aperiodic_max_per_device < aperiodic_min_per_device:
+        raise ValueError("aperiodic_max_per_device must be >= aperiodic_min_per_device.")
+
+    rng = random.Random(seed)
+    periodic_tasks: list[IoTTask] = []
+    online_tasks: list[IoTTask] = []
+
+    for device in devices:
+        release_offset = rng.uniform(0.0, offline_period)
+        job_index = 0
+        release_time = release_offset
+        while release_time <= simulation_horizon:
+            periodic_tasks.append(
+                IoTTask(
+                    task_id=f"p{device.device_id}:{job_index}",
+                    name=f"Periodic-{device.device_id}",
+                    release_time=round(release_time, 3),
+                    execution_time=round(rng.uniform(0.2, 1.2), 3),
+                    assigned_device_id=device.device_id,
+                )
+            )
+            job_index += 1
+            release_time = release_offset + (job_index * offline_period)
+
+        aperiodic_count = rng.randint(aperiodic_min_per_device, aperiodic_max_per_device)
+        for task_index in range(aperiodic_count):
+            online_tasks.append(
+                IoTTask(
+                    task_id=f"a{device.device_id}:{task_index}",
+                    name=f"Aperiodic-{device.device_id}",
+                    release_time=round(rng.uniform(0.0, simulation_horizon), 3),
+                    execution_time=round(rng.uniform(0.2, 1.5), 3),
+                    assigned_device_id=device.device_id,
+                )
+            )
+
+    periodic_tasks.sort(key=lambda task: (task.release_time, task.task_id))
+    online_tasks.sort(key=lambda task: (task.release_time, task.task_id))
+    return periodic_tasks, online_tasks

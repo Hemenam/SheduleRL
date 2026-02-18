@@ -36,6 +36,8 @@ class OffloadedJob:
     service_finish_time: float
     transfer_overhead: float
     was_offloaded: bool
+    dispatch_time: float = 0.0
+    decision_time: float = 0.0
 
 
 def schedule_itbs(
@@ -235,5 +237,152 @@ def schedule_iot_offloading(
                 was_offloaded=True,
             )
         )
+
+    return results
+
+
+def schedule_iot_offloading_online(
+    tasks: Iterable[IoTTask],
+    devices: Iterable[IoTDevice],
+    servers: Iterable[EdgeServer],
+    transfer_overhead: float,
+    tick_interval: float = 1.0,
+    decision_time: float = 0.01,
+    reclaim_idle_time: bool = True,
+) -> list[OffloadedJob]:
+    """
+    Online, procedure-based scheduling:
+    - A dispatcher procedure runs once every `tick_interval` seconds.
+    - At each tick, dispatch decisions are completed within `decision_time`.
+    """
+    if tick_interval <= 0.0:
+        raise ValueError("tick_interval must be > 0.")
+    if decision_time < 0.0:
+        raise ValueError("decision_time must be >= 0.")
+    if decision_time >= tick_interval:
+        raise ValueError("decision_time must be smaller than tick_interval.")
+
+    device_list = list(devices)
+    server_list = list(servers)
+    task_list = sorted(tasks, key=lambda task: (task.release_time, task.task_id))
+
+    if not device_list:
+        raise ValueError("At least one IoT device must be provided.")
+    if not server_list:
+        raise ValueError("At least one server must be provided.")
+    if transfer_overhead < 0.0:
+        raise ValueError("transfer_overhead must be >= 0.")
+
+    device_ids = {device.device_id for device in device_list}
+    server_bandwidths = [server.bandwidth for server in server_list]
+    for bw in server_bandwidths:
+        if bw <= 0.0 or bw > 1.0:
+            raise ValueError("Each server bandwidth must be in (0, 1].")
+
+    pending_by_device: dict[int, list[IoTTask]] = {device_id: [] for device_id in device_ids}
+    device_finish_times = {device.device_id: 0.0 for device in device_list}
+    server_virtual_deadlines = [0.0] * len(server_list)
+    server_finish_times = [0.0] * len(server_list)
+    results: list[OffloadedJob] = []
+
+    next_task_index = 0
+    tick = 0.0
+    final_arrival = task_list[-1].release_time if task_list else 0.0
+
+    while next_task_index < len(task_list) or any(pending_by_device.values()):
+        while (
+            next_task_index < len(task_list)
+            and task_list[next_task_index].release_time <= tick + 1e-9
+        ):
+            task = task_list[next_task_index]
+            if task.execution_time <= 0.0:
+                raise ValueError(f"execution_time must be > 0 for task '{task.task_id}'.")
+            if task.release_time < 0.0:
+                raise ValueError(f"release_time must be >= 0 for task '{task.task_id}'.")
+            if task.assigned_device_id not in device_ids:
+                raise ValueError(
+                    f"Task '{task.task_id}' assigned to unknown device {task.assigned_device_id}."
+                )
+            pending_by_device[task.assigned_device_id].append(task)
+            next_task_index += 1
+
+        dispatch_time = tick + decision_time
+        for device_id in sorted(pending_by_device.keys()):
+            queue = pending_by_device[device_id]
+            if not queue:
+                continue
+            task = queue.pop(0)
+
+            device_available = device_finish_times[task.assigned_device_id]
+            if dispatch_time >= device_available:
+                service_start = max(dispatch_time, task.release_time)
+                service_finish = service_start + task.execution_time
+                device_finish_times[task.assigned_device_id] = service_finish
+                results.append(
+                    OffloadedJob(
+                        task_id=task.task_id,
+                        task_name=task.name,
+                        device_id=task.assigned_device_id,
+                        server_id=-1,
+                        arrival_time=task.release_time,
+                        execution_time=task.execution_time,
+                        assigned_deadline=service_finish,
+                        service_start_time=service_start,
+                        service_finish_time=service_finish,
+                        transfer_overhead=0.0,
+                        was_offloaded=False,
+                        dispatch_time=dispatch_time,
+                        decision_time=decision_time,
+                    )
+                )
+                continue
+
+            selected_server_id = min(
+                range(len(server_list)),
+                key=lambda server_id: (
+                    max(dispatch_time, server_finish_times[server_id]),
+                    server_virtual_deadlines[server_id],
+                    server_id,
+                ),
+            )
+            server_bw = server_bandwidths[selected_server_id]
+            prev_deadline = server_virtual_deadlines[selected_server_id]
+            prev_finish = server_finish_times[selected_server_id]
+
+            if reclaim_idle_time and dispatch_time > prev_finish:
+                prev_deadline = max(0.0, dispatch_time)
+
+            virtual_start = max(dispatch_time, prev_deadline)
+            effective_execution = task.execution_time + transfer_overhead
+            assigned_deadline = virtual_start + (effective_execution / server_bw)
+
+            service_start = max(dispatch_time, prev_finish)
+            service_finish = service_start + effective_execution
+
+            server_virtual_deadlines[selected_server_id] = assigned_deadline
+            server_finish_times[selected_server_id] = service_finish
+
+            results.append(
+                OffloadedJob(
+                    task_id=task.task_id,
+                    task_name=task.name,
+                    device_id=task.assigned_device_id,
+                    server_id=selected_server_id,
+                    arrival_time=task.release_time,
+                    execution_time=task.execution_time,
+                    assigned_deadline=assigned_deadline,
+                    service_start_time=service_start,
+                    service_finish_time=service_finish,
+                    transfer_overhead=transfer_overhead,
+                    was_offloaded=True,
+                    dispatch_time=dispatch_time,
+                    decision_time=decision_time,
+                )
+            )
+
+        if next_task_index < len(task_list) or any(pending_by_device.values()):
+            tick += tick_interval
+        elif tick < final_arrival:
+            tick = final_arrival
 
     return results
