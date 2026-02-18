@@ -38,6 +38,7 @@ class CommandController:
                 reclaim_idle_time=not args.no_reclaim,
                 plot=args.plot,
                 plot_file=args.plot_file,
+                json_path=args.json,
             )
             return
 

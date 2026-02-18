@@ -1,5 +1,11 @@
 from models.iot import EdgeServer, IoTDevice, IoTTask
-from services import ITBSJob, TaskService, schedule_iot_offloading, schedule_itbs
+from services import (
+    ITBSJob,
+    TaskService,
+    load_iot_simulation,
+    schedule_iot_offloading,
+    schedule_itbs,
+)
 from views import render_iot_schedule, render_schedule, save_gantt_plot, save_iot_gantt_plot
 
 
@@ -82,37 +88,43 @@ class ScheduleController:
         reclaim_idle_time: bool = True,
         plot: str | None = None,
         plot_file: str = "offload_gantt.png",
+        json_path: str | None = None,
     ) -> int:
-        tasks = self.task_service.list_tasks()
-        if not tasks:
-            print("No aperiodic tasks found. Run `python main.py seed` first.")
-            return 0
-
-        if bandwidths:
-            selected_bandwidths = bandwidths
-        else:
-            if servers < 1:
-                raise ValueError("servers must be >= 1")
-            selected_bandwidths = [bandwidth] * servers
-
-        devices = [IoTDevice(device_id=i) for i in range(len(tasks))]
-        servers_list = [
-            EdgeServer(server_id=i, bandwidth=bw)
-            for i, bw in enumerate(selected_bandwidths)
-        ]
-
-        tasks_by_id = sorted(tasks, key=lambda task: task.id)
-        iot_tasks: list[IoTTask] = []
-        for idx, task in enumerate(tasks_by_id):
-            iot_tasks.append(
-                IoTTask(
-                    task_id=str(task.id),
-                    name=task.name,
-                    release_time=float(task.release_time),
-                    execution_time=float(task.wcet),
-                    assigned_device_id=idx,
-                )
+        if json_path:
+            devices, servers_list, iot_tasks, transfer_overhead, reclaim_idle_time = (
+                load_iot_simulation(json_path)
             )
+        else:
+            tasks = self.task_service.list_tasks()
+            if not tasks:
+                print("No aperiodic tasks found. Run `python main.py seed` first.")
+                return 0
+
+            if bandwidths:
+                selected_bandwidths = bandwidths
+            else:
+                if servers < 1:
+                    raise ValueError("servers must be >= 1")
+                selected_bandwidths = [bandwidth] * servers
+
+            devices = [IoTDevice(device_id=i) for i in range(len(tasks))]
+            servers_list = [
+                EdgeServer(server_id=i, bandwidth=bw)
+                for i, bw in enumerate(selected_bandwidths)
+            ]
+
+            tasks_by_id = sorted(tasks, key=lambda task: task.id)
+            iot_tasks = []
+            for idx, task in enumerate(tasks_by_id):
+                iot_tasks.append(
+                    IoTTask(
+                        task_id=str(task.id),
+                        name=task.name,
+                        release_time=float(task.release_time),
+                        execution_time=float(task.wcet),
+                        assigned_device_id=idx,
+                    )
+                )
 
         results = schedule_iot_offloading(
             tasks=iot_tasks,

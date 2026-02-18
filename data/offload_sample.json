@@ -1,0 +1,35 @@
+{
+  "transfer_overhead": 0.2,
+  "reclaim_idle_time": true,
+  "devices": [
+    { "device_id": 0 },
+    { "device_id": 1 }
+  ],
+  "servers": [
+    { "server_id": 0, "bandwidth": 0.5 },
+    { "server_id": 1, "bandwidth": 0.5 }
+  ],
+  "tasks": [
+    {
+      "task_id": "t1",
+      "name": "Sensor sync",
+      "release_time": 0.0,
+      "execution_time": 1.0,
+      "assigned_device_id": 0
+    },
+    {
+      "task_id": "t2",
+      "name": "Camera upload",
+      "release_time": 0.1,
+      "execution_time": 1.2,
+      "assigned_device_id": 0
+    },
+    {
+      "task_id": "t3",
+      "name": "Telemetry",
+      "release_time": 0.2,
+      "execution_time": 0.5,
+      "assigned_device_id": 1
+    }
+  ]
+}

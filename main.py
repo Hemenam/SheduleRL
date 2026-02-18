@@ -96,6 +96,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="Constant offloading overhead added to each offloaded task.",
     )
     offload_parser.add_argument(
+        "--json",
+        default=None,
+        help="Path to JSON input describing devices, servers, tasks, and overhead.",
+    )
+    offload_parser.add_argument(
         "--no-reclaim",
         action="store_true",
         help="Disable iTBS idle-time reclaim behavior on servers.",

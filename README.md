@@ -147,7 +147,33 @@ Examples:
 python main.py offload -u 0.55 -k 3 -t 0.2
 python main.py offload --bandwidths 0.35,0.45,0.20 -t 0.1
 python main.py offload -u 0.55 -k 2 -t 0.2 --plot gantt --plot-file plots/offload_gantt.png
+python main.py offload --json data/offload_sample.json
 ```
+
+JSON input format (use with `--json`):
+
+```json
+{
+  "transfer_overhead": 0.2,
+  "reclaim_idle_time": true,
+  "devices": [{ "device_id": 0 }, { "device_id": 1 }],
+  "servers": [{ "server_id": 0, "bandwidth": 0.5 }],
+  "tasks": [
+    {
+      "task_id": "t1",
+      "name": "Sensor sync",
+      "release_time": 0.0,
+      "execution_time": 1.0,
+      "assigned_device_id": 0
+    }
+  ]
+}
+```
+
+Notes:
+- `devices` is optional; if omitted, devices are inferred from task assignments.
+- `servers` and `tasks` are required.
+- When `--json` is provided, JSON values override CLI flags for bandwidth, `-k`, `-t`, and `--no-reclaim`.
 
 ## 6. Data Model
 
