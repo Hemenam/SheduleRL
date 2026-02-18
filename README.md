@@ -65,12 +65,15 @@ python main.py --mode [staticserver|iot] --vars [N] --alg [none|gen|rl]
 Behavior:
 - `--mode staticserver`: fixed 5 edge servers, variable IoT device count from `--vars`.
 - `--mode iot`: fixed 100 IoT devices, variable edge server count from `--vars`.
+- Range constraints:
+  - `staticserver`: `--vars` in `[10, 50]`.
+  - `iot`: `--vars` in `[1, 20]`.
 - Offline phase: 20 periodic tasks per device, feasibility validation, EDF base schedule.
 - Online phase:
   - `none`: local iTBS only.
   - `gen`: GA-based local vs offload decision.
   - `rl`: RL-based local vs offload decision.
-- Outputs: 6 charts + 1 task specification table in `plots/`.
+- Outputs per run under `plots/<mode>_vars<N>/`: 6 charts + 1 task specification table + 1 scheduling chart.
 
 ## 5. Commands Reference
 
