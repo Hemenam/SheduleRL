@@ -64,6 +64,53 @@ def build_parser() -> argparse.ArgumentParser:
         default="schedule_gantt.png",
         help="Output file path for plot image.",
     )
+
+    offload_parser = subparsers.add_parser(
+        "offload", help="Schedule IoT tasks with online edge offloading"
+    )
+    offload_parser.add_argument(
+        "-u",
+        "--bandwidth",
+        type=float,
+        default=0.5,
+        help="Single-server bandwidth U_s for offloading in (0, 1].",
+    )
+    offload_parser.add_argument(
+        "--bandwidths",
+        type=_parse_bandwidths,
+        default=None,
+        help="Comma-separated server bandwidths for multi-server mode (example: 0.4,0.6).",
+    )
+    offload_parser.add_argument(
+        "-k",
+        "--servers",
+        type=int,
+        default=1,
+        help="Number of identical servers if --bandwidths is not provided.",
+    )
+    offload_parser.add_argument(
+        "-t",
+        "--transfer-overhead",
+        type=float,
+        default=0.0,
+        help="Constant offloading overhead added to each offloaded task.",
+    )
+    offload_parser.add_argument(
+        "--no-reclaim",
+        action="store_true",
+        help="Disable iTBS idle-time reclaim behavior on servers.",
+    )
+    offload_parser.add_argument(
+        "--plot",
+        choices=["gantt"],
+        default=None,
+        help="Render schedule plot.",
+    )
+    offload_parser.add_argument(
+        "--plot-file",
+        default="offload_gantt.png",
+        help="Output file path for plot image.",
+    )
     return parser
 
 

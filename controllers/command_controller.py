@@ -29,6 +29,18 @@ class CommandController:
             )
             return
 
+        if args.command == "offload":
+            self.schedule_controller.schedule_offload(
+                bandwidth=args.bandwidth,
+                bandwidths=args.bandwidths,
+                servers=args.servers,
+                transfer_overhead=args.transfer_overhead,
+                reclaim_idle_time=not args.no_reclaim,
+                plot=args.plot,
+                plot_file=args.plot_file,
+            )
+            return
+
         if args.command == "clear":
             self.task_controller.clear()
             return

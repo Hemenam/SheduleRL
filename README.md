@@ -6,6 +6,7 @@ It provides:
 - SQLite persistence for task/workload data.
 - ORM-based data access with SQLAlchemy.
 - CLI commands for seeding, listing, clearing, and scheduling.
+- IoT offloading simulation with device-local execution or edge server scheduling.
 - Optional Gantt chart rendering for schedule visualization.
 
 ## 1. Project Purpose
@@ -129,6 +130,25 @@ python main.py schedule -a itbs --no-reclaim
 python main.py schedule -a itbs --plot gantt --plot-file plots/itbs_gantt.png
 ```
 
+### 5.5 `offload`
+
+Schedule IoT tasks with online offloading to edge servers.
+
+Rules:
+- There are `n` tasks and `n` IoT devices.
+- Each task is initially assigned to exactly one device.
+- If a task arrives when its device is idle, it executes locally on that device.
+- If the device is busy, the task is offloaded to one of `k` servers.
+- Offloaded tasks incur a constant transfer overhead `t`.
+
+Examples:
+
+```bash
+python main.py offload -u 0.55 -k 3 -t 0.2
+python main.py offload --bandwidths 0.35,0.45,0.20 -t 0.1
+python main.py offload -u 0.55 -k 2 -t 0.2 --plot gantt --plot-file plots/offload_gantt.png
+```
+
 ## 6. Data Model
 
 ORM entity: `RealTimeTask` (`models/task.py`)
@@ -144,6 +164,11 @@ Columns:
 - `description` (nullable)
 
 Note: current workflow treats all seeded tasks as aperiodic.
+
+Additional in-memory models for the offloading simulation (`models/iot.py`):
+- `IoTDevice` (device_id)
+- `EdgeServer` (server_id, bandwidth)
+- `IoTTask` (task_id, name, release_time, execution_time, assigned_device_id)
 
 ## 7. Architecture Overview
 
@@ -211,7 +236,15 @@ Where:
 Optional behavior:
 - Idle-time reclaim can be disabled with `--no-reclaim`.
 
-## 9. Typical Workflow
+## 9. IoT Offloading Summary
+
+Each task is assigned to a unique IoT device. At arrival time:
+- If the device is idle, the task runs locally.
+- If the device is busy, the task is offloaded to one of the edge servers.
+- Offloading adds a constant transfer overhead `t` to the service time.
+- Servers use iTBS to assign deadlines and schedule service.
+
+## 10. Typical Workflow
 
 ```bash
 python main.py clear
@@ -220,14 +253,14 @@ python main.py list
 python main.py schedule -a itbs -u 0.55 --plot gantt --plot-file plots/run1.png
 ```
 
-## 10. Output Files
+## 11. Output Files
 
 - Database: `tasks.db` (project root)
 - Plot files: user-defined via `--plot-file` (default: `schedule_gantt.png`)
 
-## 11. Troubleshooting
+## 12. Troubleshooting
 
-### 11.1 No tasks found
+### 12.1 No tasks found
 
 Run:
 
@@ -235,7 +268,7 @@ Run:
 python main.py seed
 ```
 
-### 11.2 Replace old data with fresh seed
+### 12.2 Replace old data with fresh seed
 
 Run:
 
