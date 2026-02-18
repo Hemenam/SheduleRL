@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from typing import Optional
 
 
 @dataclass(frozen=True)
@@ -19,3 +20,4 @@ class IoTTask:
     release_time: float
     execution_time: float
     assigned_device_id: int
+    relative_deadline: Optional[float] = None

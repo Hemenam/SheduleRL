@@ -56,6 +56,22 @@ python main.py <command> [options]
 
 If no command is provided, default behavior is equivalent to `list`.
 
+Project experiment command (IoT-Edge scheduling framework):
+
+```bash
+python main.py --mode [staticserver|iot] --vars [N] --alg [none|gen|rl]
+```
+
+Behavior:
+- `--mode staticserver`: fixed 5 edge servers, variable IoT device count from `--vars`.
+- `--mode iot`: fixed 100 IoT devices, variable edge server count from `--vars`.
+- Offline phase: 20 periodic tasks per device, feasibility validation, EDF base schedule.
+- Online phase:
+  - `none`: local iTBS only.
+  - `gen`: GA-based local vs offload decision.
+  - `rl`: RL-based local vs offload decision.
+- Outputs: 6 charts + 1 task specification table in `plots/`.
+
 ## 5. Commands Reference
 
 ### 5.1 `seed`
@@ -105,29 +121,30 @@ python main.py clear
 
 Run a scheduler on current tasks.
 
-Current supported algorithm:
-- `itbs`
+Policy:
+- `schedule` command uses iTBS for aperiodic database tasks.
+- `offload` uses EDF on IoT devices for periodic jobs, and iTBS on edge servers for aperiodic offloaded jobs.
 
 Basic usage:
 
 ```bash
-python main.py schedule -a itbs
+python main.py schedule
 ```
 
 Options:
 - `-u`, `--bandwidth`: single iTBS server bandwidth `U_s` in `(0, 1]`.
 - `--bandwidths`: comma-separated iTBS server bandwidths for multi-server mode (example: `0.4,0.6`).
-- `--no-reclaim`: disable idle-time reclaim behavior.
+- `--no-reclaim`: disable iTBS idle-time reclaim behavior.
 - `--plot gantt`: generate Gantt chart.
 - `--plot-file <path>`: output image path.
 
 Examples:
 
 ```bash
-python main.py schedule -a itbs -u 0.55
-python main.py schedule -a itbs --bandwidths 0.35,0.45,0.20
-python main.py schedule -a itbs --no-reclaim
-python main.py schedule -a itbs --plot gantt --plot-file plots/itbs_gantt.png
+python main.py schedule -u 0.55
+python main.py schedule --bandwidths 0.35,0.45,0.20
+python main.py schedule --no-reclaim
+python main.py schedule --plot gantt --plot-file plots/itbs_gantt.png
 ```
 
 ### 5.5 `offload`
@@ -280,7 +297,7 @@ Each task is assigned to a unique IoT device. At arrival time:
 python main.py clear
 python main.py seed
 python main.py list
-python main.py schedule -a itbs -u 0.55 --plot gantt --plot-file plots/run1.png
+python main.py schedule -u 0.55 --plot gantt --plot-file plots/run1.png
 ```
 
 ## 11. Output Files
@@ -311,14 +328,14 @@ python main.py seed --force
 Use an explicit path and check output message:
 
 ```bash
-python main.py schedule -a itbs --plot gantt --plot-file plots/check.png
+python main.py schedule --plot gantt --plot-file plots/check.png
 ```
 
 The CLI prints the absolute path of the saved image.
 
 ## 12. Future Extension Ideas
 
-- Add more scheduling algorithms (e.g., CBS variants, EDF baseline traces).
+- Add more scheduling algorithms (e.g., CBS variants).
 - Add import/export for workload profiles.
 - Add response-time and deadline-miss statistics report command.
 - Add tests for controller flows and scheduler edge cases.

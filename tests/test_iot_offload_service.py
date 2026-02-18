@@ -5,7 +5,11 @@ from pathlib import Path
 
 from models.iot import EdgeServer, IoTDevice, IoTTask
 from services.iot_loader import generate_random_iot_workload, load_iot_simulation
-from services.scheduler_service import schedule_iot_offloading, schedule_iot_offloading_online
+from services.scheduler_service import (
+    schedule_iot_offloading,
+    schedule_iot_offloading_online,
+    schedule_iot_periodic_edf,
+)
 
 
 class TestIoTOffloading(unittest.TestCase):
@@ -191,6 +195,44 @@ class TestIoTOffloading(unittest.TestCase):
         self.assertTrue(results[1].was_offloaded)
         self.assertAlmostEqual(results[1].dispatch_time, 0.51, places=6)
         self.assertAlmostEqual(results[1].decision_time, 0.01, places=6)
+
+    def test_periodic_edf_runs_per_device(self) -> None:
+        devices = [IoTDevice(device_id=0), IoTDevice(device_id=1)]
+        tasks = [
+            IoTTask(
+                task_id="p0a",
+                name="P0-A",
+                release_time=0.0,
+                execution_time=1.0,
+                assigned_device_id=0,
+                relative_deadline=4.0,
+            ),
+            IoTTask(
+                task_id="p0b",
+                name="P0-B",
+                release_time=0.0,
+                execution_time=0.5,
+                assigned_device_id=0,
+                relative_deadline=2.0,
+            ),
+            IoTTask(
+                task_id="p1a",
+                name="P1-A",
+                release_time=0.0,
+                execution_time=0.25,
+                assigned_device_id=1,
+                relative_deadline=1.0,
+            ),
+        ]
+
+        results = schedule_iot_periodic_edf(tasks=tasks, devices=devices)
+
+        self.assertEqual(len(results), 3)
+        by_device = {0: [], 1: []}
+        for row in results:
+            by_device[row.server_id].append(row.job_id)
+        self.assertEqual(by_device[0], ["p0b", "p0a"])
+        self.assertEqual(by_device[1], ["p1a"])
 
 
 if __name__ == "__main__":

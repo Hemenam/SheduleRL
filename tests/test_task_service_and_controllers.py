@@ -33,12 +33,14 @@ class DatabaseBackedTestCase(unittest.TestCase):
         self.engine.dispose()
         self.tempdir.cleanup()
 
-    def create_task(self, name: str, release: float, wcet: float = 1.0) -> None:
+    def create_task(
+        self, name: str, release: float, wcet: float = 1.0, deadline: float | None = None
+    ) -> None:
         self.task_service.create_task(
             name=name,
             release_time=release,
             wcet=wcet,
-            relative_deadline=wcet + 1.0,
+            relative_deadline=deadline if deadline is not None else wcet + 1.0,
             period=None,
             description=f"{name} description",
         )
@@ -144,7 +146,6 @@ class TestScheduleController(DatabaseBackedTestCase):
             return_value=Path("/tmp/test.png"),
         ) as mock_plot, patch("builtins.print") as mock_print:
             count = controller.schedule(
-                algorithm="itbs",
                 bandwidth=0.5,
                 reclaim_idle_time=True,
                 plot="gantt",
@@ -159,15 +160,9 @@ class TestScheduleController(DatabaseBackedTestCase):
     def test_schedule_no_tasks_returns_zero(self) -> None:
         controller = ScheduleController(self.task_service)
         with patch("builtins.print") as mock_print:
-            count = controller.schedule(algorithm="itbs")
+            count = controller.schedule()
             self.assertEqual(count, 0)
             mock_print.assert_called_once()
-
-    def test_schedule_invalid_algorithm_raises(self) -> None:
-        self.create_task("j1", release=0.0, wcet=1.0)
-        controller = ScheduleController(self.task_service)
-        with self.assertRaises(ValueError):
-            controller.schedule(algorithm="unknown")
 
 
 if __name__ == "__main__":

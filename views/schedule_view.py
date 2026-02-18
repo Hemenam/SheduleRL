@@ -1,7 +1,9 @@
 from pathlib import Path
 
 
-def _format_bandwidths(bandwidths: list[float]) -> str:
+def _format_bandwidths(bandwidths: list[float] | None) -> str:
+    if not bandwidths:
+        return ""
     if len(bandwidths) == 1:
         return f"U_s={bandwidths[0]:.3f}"
     values = ", ".join(f"S{server_id}:{bandwidth:.3f}" for server_id, bandwidth in enumerate(bandwidths))
@@ -9,9 +11,13 @@ def _format_bandwidths(bandwidths: list[float]) -> str:
 
 
 def render_schedule(
-    results, task_name_by_id: dict[str, str], algorithm: str, bandwidths: list[float]
+    results, task_name_by_id: dict[str, str], algorithm: str, bandwidths: list[float] | None
 ) -> None:
-    print(f"Schedule algorithm: {algorithm.upper()} ({_format_bandwidths(bandwidths)})")
+    bandwidth_label = _format_bandwidths(bandwidths)
+    if bandwidth_label:
+        print(f"Schedule algorithm: {algorithm.upper()} ({bandwidth_label})")
+    else:
+        print(f"Schedule algorithm: {algorithm.upper()}")
     for row in results:
         name = task_name_by_id[row.job_id]
         print(
@@ -27,7 +33,7 @@ def save_gantt_plot(
     task_name_by_id: dict[str, str],
     output_path: str,
     algorithm: str,
-    bandwidths: list[float],
+    bandwidths: list[float] | None,
 ) -> Path:
     import matplotlib.pyplot as plt
 
@@ -59,7 +65,11 @@ def save_gantt_plot(
     ax.set_yticklabels(y_labels)
     ax.set_xlabel("Time")
     ax.set_ylabel("Aperiodic Jobs")
-    ax.set_title(f"{algorithm.upper()} Schedule Gantt ({_format_bandwidths(bandwidths)})")
+    bandwidth_label = _format_bandwidths(bandwidths)
+    if bandwidth_label:
+        ax.set_title(f"{algorithm.upper()} Schedule Gantt ({bandwidth_label})")
+    else:
+        ax.set_title(f"{algorithm.upper()} Schedule Gantt")
     ax.grid(axis="x", linestyle="--", alpha=0.35)
     ax.margins(x=0.02)
 

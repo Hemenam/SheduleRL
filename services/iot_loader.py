@@ -45,6 +45,7 @@ def _expand_periodic_tasks(
                     release_time=release_time,
                     execution_time=execution_time,
                     assigned_device_id=device_id,
+                    relative_deadline=period,
                 )
             )
     return tasks
@@ -88,6 +89,9 @@ def load_iot_simulation(
                     release_time=release_time,
                     execution_time=execution_time,
                     assigned_device_id=assigned_device_id,
+                    relative_deadline=float(item["relative_deadline"])
+                    if "relative_deadline" in item
+                    else None,
                 )
             )
     elif raw_periodic is not None:
@@ -175,6 +179,7 @@ def generate_random_iot_workload(
                     release_time=round(release_time, 3),
                     execution_time=round(rng.uniform(0.2, 1.2), 3),
                     assigned_device_id=device.device_id,
+                    relative_deadline=offline_period,
                 )
             )
             job_index += 1

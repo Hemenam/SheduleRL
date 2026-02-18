@@ -12,6 +12,14 @@ class ITBSJob:
 
 
 @dataclass(frozen=True)
+class EDFJob:
+    job_id: str
+    arrival_time: float
+    execution_time: float
+    absolute_deadline: float
+
+
+@dataclass(frozen=True)
 class ITBSScheduleResult:
     job_id: str
     server_id: int
@@ -38,6 +46,123 @@ class OffloadedJob:
     was_offloaded: bool
     dispatch_time: float = 0.0
     decision_time: float = 0.0
+
+
+def schedule_edf(jobs: Iterable[EDFJob]) -> list[ITBSScheduleResult]:
+    """
+    Compute a non-preemptive single-processor EDF schedule for aperiodic jobs.
+    """
+    task_list = sorted(jobs, key=lambda job: (job.arrival_time, job.job_id))
+    for job in task_list:
+        if job.execution_time <= 0.0:
+            raise ValueError(f"execution_time must be > 0 for job '{job.job_id}'.")
+        if job.arrival_time < 0.0:
+            raise ValueError(f"arrival_time must be >= 0 for job '{job.job_id}'.")
+        if job.absolute_deadline < job.arrival_time:
+            raise ValueError(
+                f"absolute_deadline must be >= arrival_time for job '{job.job_id}'."
+            )
+
+    current_time = 0.0
+    next_index = 0
+    pending: list[EDFJob] = []
+    results: list[ITBSScheduleResult] = []
+
+    while next_index < len(task_list) or pending:
+        while next_index < len(task_list) and task_list[next_index].arrival_time <= current_time:
+            pending.append(task_list[next_index])
+            next_index += 1
+
+        if not pending:
+            current_time = task_list[next_index].arrival_time
+            continue
+
+        selected_job_index = min(
+            range(len(pending)),
+            key=lambda idx: (
+                pending[idx].absolute_deadline,
+                pending[idx].arrival_time,
+                pending[idx].job_id,
+            ),
+        )
+        selected_job = pending.pop(selected_job_index)
+        service_start = max(current_time, selected_job.arrival_time)
+        service_finish = service_start + selected_job.execution_time
+        current_time = service_finish
+
+        results.append(
+            ITBSScheduleResult(
+                job_id=selected_job.job_id,
+                server_id=0,
+                server_bandwidth=1.0,
+                arrival_time=selected_job.arrival_time,
+                execution_time=selected_job.execution_time,
+                assigned_deadline=selected_job.absolute_deadline,
+                service_start_time=service_start,
+                service_finish_time=service_finish,
+            )
+        )
+
+    return results
+
+
+def schedule_iot_periodic_edf(
+    tasks: Iterable[IoTTask], devices: Iterable[IoTDevice]
+) -> list[ITBSScheduleResult]:
+    """
+    Schedule periodic IoT jobs with per-device non-preemptive EDF.
+    """
+    device_list = list(devices)
+    if not device_list:
+        raise ValueError("At least one IoT device must be provided.")
+
+    device_ids = {device.device_id for device in device_list}
+    jobs_by_device: dict[int, list[EDFJob]] = {device.device_id: [] for device in device_list}
+
+    for task in tasks:
+        if task.execution_time <= 0.0:
+            raise ValueError(f"execution_time must be > 0 for task '{task.task_id}'.")
+        if task.release_time < 0.0:
+            raise ValueError(f"release_time must be >= 0 for task '{task.task_id}'.")
+        if task.assigned_device_id not in device_ids:
+            raise ValueError(
+                f"Task '{task.task_id}' assigned to unknown device {task.assigned_device_id}."
+            )
+        if task.relative_deadline is None or task.relative_deadline <= 0.0:
+            raise ValueError(
+                f"Periodic task '{task.task_id}' must provide relative_deadline > 0."
+            )
+
+        jobs_by_device[task.assigned_device_id].append(
+            EDFJob(
+                job_id=task.task_id,
+                arrival_time=task.release_time,
+                execution_time=task.execution_time,
+                absolute_deadline=task.release_time + task.relative_deadline,
+            )
+        )
+
+    results: list[ITBSScheduleResult] = []
+    for device in device_list:
+        device_results = schedule_edf(jobs_by_device[device.device_id])
+        for result in device_results:
+            results.append(
+                ITBSScheduleResult(
+                    job_id=result.job_id,
+                    server_id=device.device_id,
+                    server_bandwidth=1.0,
+                    arrival_time=result.arrival_time,
+                    execution_time=result.execution_time,
+                    assigned_deadline=result.assigned_deadline,
+                    service_start_time=result.service_start_time,
+                    service_finish_time=result.service_finish_time,
+                )
+            )
+
+    return sorted(
+        results,
+        key=lambda row: (row.service_start_time, row.server_id, row.job_id),
+    )
 
 
 def schedule_itbs(

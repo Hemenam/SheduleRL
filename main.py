@@ -2,6 +2,7 @@ import argparse
 
 from controllers import CommandController
 from data import SessionLocal, init_db
+from services.iot_edge_experiment import run_iot_edge_experiment
 from services import TaskService
 
 
@@ -15,6 +16,25 @@ def _parse_bandwidths(value: str) -> list[float]:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="ScheduRL real-time workload CLI")
+    parser.add_argument(
+        "--mode",
+        choices=["staticserver", "iot"],
+        default=None,
+        help="Experiment mode: fixed 5 edge servers or fixed 100 IoT devices.",
+    )
+    parser.add_argument(
+        "--vars",
+        type=int,
+        default=None,
+        help="Variable entity count (devices for staticserver mode, servers for iot mode).",
+    )
+    parser.add_argument(
+        "--alg",
+        choices=["none", "gen", "rl"],
+        default="none",
+        help="Online decision algorithm: none (local), gen (GA), rl (Q-learning).",
+    )
+
     subparsers = parser.add_subparsers(dest="command")
 
     seed_parser = subparsers.add_parser("seed", help="Populate database with sample tasks")
@@ -28,13 +48,6 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers.add_parser("clear", help="Delete all tasks from the database")
 
     schedule_parser = subparsers.add_parser("schedule", help="Build a schedule from tasks")
-    schedule_parser.add_argument(
-        "-a",
-        "--algorithm",
-        required=True,
-        choices=["itbs"],
-        help="Scheduling algorithm to use.",
-    )
     schedule_parser.add_argument(
         "-u",
         "--bandwidth",
@@ -180,6 +193,32 @@ def build_parser() -> argparse.ArgumentParser:
 def main() -> None:
     parser = build_parser()
     args = parser.parse_args()
+
+    if args.mode is not None or args.vars is not None:
+        if args.mode is None or args.vars is None:
+            raise ValueError("Both --mode and --vars are required for experiment mode.")
+
+        result = run_iot_edge_experiment(mode=args.mode, vars_n=args.vars, alg=args.alg)
+        selected = result["selected_metrics"]
+
+        print("IoT-Edge Task Scheduling Framework Run Complete")
+        print(f"mode={result['mode']}, vars={result['vars']}, alg={result['alg']}")
+        print(
+            f"devices={result['devices']}, servers={result['servers']}, "
+            f"periodic_tasks={result['periodic_tasks']}, soft_tasks={result['soft_tasks']}"
+        )
+        print(
+            "selected_metrics: "
+            f"offloading_ratio={selected.offloading_ratio:.3f}, "
+            f"hard_schedulability={selected.hard_schedulability_rate:.3f}, "
+            f"soft_success={selected.soft_deadline_success_rate:.3f}, "
+            f"latency={selected.avg_soft_latency:.3f}, "
+            f"makespan={selected.makespan:.3f}"
+        )
+        print("Generated outputs:")
+        for path in result["generated_files"]:
+            print(f"- {path}")
+        return
 
     init_db()
 

@@ -6,6 +6,7 @@ from services import (
     TaskService,
     generate_random_iot_workload,
     load_iot_simulation,
+    schedule_iot_periodic_edf,
     schedule_iot_offloading_online,
     schedule_itbs,
 )
@@ -18,7 +19,6 @@ class ScheduleController:
 
     def schedule(
         self,
-        algorithm: str,
         bandwidth: float = 0.5,
         bandwidths: list[float] | None = None,
         reclaim_idle_time: bool = True,
@@ -29,9 +29,6 @@ class ScheduleController:
         if not tasks:
             print("No aperiodic tasks found. Run `python main.py seed` first.")
             return 0
-
-        if algorithm != "itbs":
-            raise ValueError(f"Unsupported algorithm: {algorithm}")
 
         jobs: list[ITBSJob] = []
         task_name_by_id: dict[str, str] = {}
@@ -52,9 +49,7 @@ class ScheduleController:
                     execution_time=execution_time,
                 )
             )
-
         selected_bandwidths = bandwidths if bandwidths else [bandwidth]
-
         results = schedule_itbs(
             jobs=jobs,
             server_bandwidths=selected_bandwidths,
@@ -64,7 +59,7 @@ class ScheduleController:
         render_schedule(
             results=results,
             task_name_by_id=task_name_by_id,
-            algorithm=algorithm,
+            algorithm="itbs",
             bandwidths=selected_bandwidths,
         )
 
@@ -75,7 +70,7 @@ class ScheduleController:
                 results=results,
                 task_name_by_id=task_name_by_id,
                 output_path=plot_file,
-                algorithm=algorithm,
+                algorithm="itbs",
                 bandwidths=selected_bandwidths,
             )
             print(f"Gantt plot saved to: {output}")
@@ -135,18 +130,9 @@ class ScheduleController:
                 aperiodic_max_per_device=aperiodic_max_per_device,
                 seed=random_seed,
             )
-            offline_jobs = [
-                ITBSJob(
-                    job_id=task.task_id,
-                    arrival_time=task.release_time,
-                    execution_time=task.execution_time,
-                )
-                for task in periodic_tasks
-            ]
-            offline_results = schedule_itbs(
-                jobs=offline_jobs,
-                server_bandwidths=[server.bandwidth for server in servers_list],
-                reclaim_idle_time=reclaim_idle_time,
+            offline_results = schedule_iot_periodic_edf(
+                tasks=periodic_tasks,
+                devices=devices,
             )
 
         if offline_results:
@@ -154,16 +140,16 @@ class ScheduleController:
             render_schedule(
                 results=offline_results,
                 task_name_by_id=name_by_id,
-                algorithm="itbs-offline",
-                bandwidths=[server.bandwidth for server in servers_list],
+                algorithm="edf-periodic-devices",
+                bandwidths=None,
             )
             offline_plot_path = plot_file.replace(".png", "_offline.png")
             output = save_gantt_plot(
                 results=offline_results,
                 task_name_by_id=name_by_id,
                 output_path=offline_plot_path,
-                algorithm="itbs-offline",
-                bandwidths=[server.bandwidth for server in servers_list],
+                algorithm="edf-periodic-devices",
+                bandwidths=None,
             )
             print(f"Offline periodic Gantt plot saved to: {output}")
 
