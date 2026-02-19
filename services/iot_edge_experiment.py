@@ -513,6 +513,13 @@ def _simulate(
     return metrics, records
 
 
+def _compute_qos_score(metrics: RunMetrics) -> float:
+    # Composite QoS score keeps comparisons meaningful even when deadline success saturates.
+    latency_term = 1.0 / (1.0 + metrics.avg_soft_latency)
+    energy_term = 1.0 / (1.0 + metrics.avg_energy_per_soft_task)
+    return (0.50 * metrics.soft_deadline_success_rate) + (0.35 * latency_term) + (0.15 * energy_term)
+
+
 def _save_task_spec_table(
     output_dir: Path,
     mode: str,
@@ -652,10 +659,11 @@ def _save_charts(
     fig4, ax4 = plt.subplots(figsize=(8, 4))
     for alg, points in qos_vs_load.items():
         s = sorted(points, key=lambda pair: pair[0])
-        ax4.plot([p[0] for p in s], [p[1] * 100.0 for p in s], marker="o", label=alg.upper())
+        ax4.plot([p[0] for p in s], [p[1] * 100.0 for p in s], marker="o", linewidth=2, label=alg.upper())
     ax4.set_xlabel("System Load Scale")
-    ax4.set_ylabel("Soft Task Success (%)")
+    ax4.set_ylabel("QoS Score (%)")
     ax4.set_title("System QoS in Various States")
+    ax4.grid(axis="y", linestyle="--", alpha=0.35)
     ax4.legend()
     _save(fig4, "4_system_qos_vs_load.png")
 
@@ -757,7 +765,7 @@ def run_iot_edge_experiment(mode: str, vars_n: int, alg: str | None = None, seed
                     soft_tasks=s_tasks,
                     rng=random.Random(seed + int(scale * 100) + alg_seed_offsets[name]),
                 )
-                qos_vs_load[name].append((scale, m.soft_deadline_success_rate))
+                qos_vs_load[name].append((scale, _compute_qos_score(m)))
 
         chart_paths = _save_charts(
             output_dir=output_dir,
